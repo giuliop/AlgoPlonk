@@ -9,7 +9,7 @@ import (
 	"github.com/consensys/gnark/backend/witness"
 )
 
-// marshalPlonkBn254Proof marshals a Plonk proof to a binary blob
+// marshalProof marshals a plonk proof to a binary blob
 func marshalProof(proof plonk.Proof) []byte {
 	var data []byte
 	switch _proof := proof.(type) {
@@ -94,6 +94,7 @@ func marshalPlonkBls12381Proof(proof *plonk_bls12381.Proof) []byte {
 	return res
 }
 
+// extractPublicInputs extracts public inputs from a witness to a binary blob
 func extractPublicInputs(witness witness.Witness) ([]byte, error) {
 	public, err := witness.Public()
 	if err != nil {

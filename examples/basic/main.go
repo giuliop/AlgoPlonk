@@ -5,7 +5,6 @@
 // We compile the circuit with gnark, build and test a proof, generate an AVM
 // verifier and compile it with puyapy, deploy it to the local network, and
 // simulate on the AVM a proof verification of the generated proof
-
 package main
 
 import (

@@ -25,7 +25,8 @@ const (
 	TestOnly
 )
 
-// Run sets up a Plonk system.
+// Run sets up a plonk system using either a trusted or test only setup,
+// as specified by the setup parameter.
 func Run(ccs constraint.ConstraintSystem, curve ecc.ID, setup Conf) (
 	plonk.ProvingKey, plonk.VerifyingKey, error) {
 
@@ -62,6 +63,7 @@ func Run(ccs constraint.ConstraintSystem, curve ecc.ID, setup Conf) (
 //go:embed bls12_381/pk.bin bls12_381/vk.bin
 var embeddedFiles embed.FS
 
+// trustedSetupBLS12381 returns trusted parameters for BLS12-381.
 func trustedSetupBLS12381(size uint64) (*kzg_bls12381.SRS, error) {
 	if size < 2 {
 		return nil, fmt.Errorf("size must be at least 2")

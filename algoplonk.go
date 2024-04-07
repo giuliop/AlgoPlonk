@@ -23,7 +23,7 @@ type CompiledCircuit struct {
 	Curve ecc.ID
 }
 
-// VerifiedProof is a proof and its witness,generated after verifying the proof
+// VerifiedProof is a proof and its witness, generated after verifying the proof
 type VerifiedProof struct {
 	Proof   plonk.Proof
 	Witness witness.Witness
@@ -66,7 +66,8 @@ func (cc *CompiledCircuit) WritePuyaPyVerifier(filename string) error {
 	return err
 }
 
-// Verify generates a proof from a circuit assignment and verifies it.
+// Verify generates a proof from a circuit assignment and verifies it
+// using gnark
 func (cc *CompiledCircuit) Verify(assignment frontend.Circuit,
 ) (*VerifiedProof, error) {
 	witness, err := frontend.NewWitness(assignment, cc.Curve.ScalarField())
@@ -88,7 +89,10 @@ func (cc *CompiledCircuit) Verify(assignment frontend.Circuit,
 	return &VerifiedProof{proof, witness}, nil
 }
 
-func (vp *VerifiedProof) WriteProofAndPublicInputs(proofFileName string, publicInputsFileName string) error {
+// WriteProofAndPublicInputs writes a proof and its public inputs to files
+// as binary blobs for the AVM verifier
+func (vp *VerifiedProof) WriteProofAndPublicInputs(proofFileName string,
+	publicInputsFileName string) error {
 	err := vp.WriteProof(proofFileName)
 	if err != nil {
 		return fmt.Errorf("error writing proof: %v", err)
