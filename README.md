@@ -1,6 +1,6 @@
 # AlgoPlonk
 
-### The power of zero knowledge proofs on the Algorand blockchain.
+## The power of zero knowledge proofs on the Algorand blockchain.
 
 AlgoPlonk automatically generates a smart contract verifier from a zk circuit definition. It integrates with the [gnark](https://github.com/Consensys/gnark) toolchain, so you can use [gnark](https://github.com/Consensys/gnark) to define a plonk based zk circuit and to generate proofs for it, and use AlgoPlonk to generate an Algorand smart contract verifier that can verify those proofs.
 
@@ -8,34 +8,34 @@ AlgoPlonk automatically generates a smart contract verifier from a zk circuit de
 The typical workflow is the following:
 1. Define and compile a plonk based zk circuit with [gnark](https://github.com/Consensys/gnark) using the [trusted setup](#trusted-setup) provided by AlgoPlonk
 2. Automatically generate a python Algorand Smart Contract with AlgoPlonk from your compiled circuit
-3. Compile the python code into the teal files to create the contract with algokit and the puyapy compiler
-4. Generate proofs and witnesses for your circuit with gnark
+3. Compile the python code into the teal files to create the contract with [algokit](https://github.com/algorandfoundation/algokit-cli) and the puyapy compiler
+4. Generate proofs and witnesses for your circuit with [gnark](https://github.com/Consensys/gnark)
 5. Export proofs and witnesses with AlgoPlonk and generate the method calls to the smart contract verifier to verify them
 
-#### Supported curves
+### Supported curves
 
 AlgoPlonk supports the curves for which the AVM offers elliptic curve operations: bn254 and bls12-381.
 
 A bn254 verifier consumes ~145,000 opcode budget, a bls12-381 verifier ~185,000.
 
-Note that at the moment AlgoPlonk doe not support custom gates.
+Note that at the moment AlgoPlonk does not support custom gates.
 
-#### Trusted Setup
+### Trusted Setup
 
 AlgoPlonk provides an out of the box trusted setup for bls12-381 verifiers using the [Ethereum KZG Ceremony](https://github.com/ethereum/kzg-ceremony), which saw over 140,000 participants in an open, decentralized, robustly audited ceremony.
 This trusted setup can support circuits with up to 2^15 (32,768) gates.
 
-Check the `doc.go` file in the setup package for more details and how to audit the provided setup.
+Check the [`doc.go`](https://github.com/giuliop/AlgoPlonk/blob/main/setup/doc.go) file in the setup package for more details.
 
 For bn254 verifiers no trusted setup is provided out of the box at the moment.
 
 For both bn254 and bls12-381 AlgoPlonk provides a test-only setup for circuits of any number of gates. This is of course NOT SUITABLE FOR PRODUCTION.
 
-#### How to use AlgoPlonk
+### How to use AlgoPlonk
 
-The `examples` folder contains some examples of how to use AlgoPlonk that you can run with `go run main.go` in each example subfolder.
+The [`examples`](https://github.com/giuliop/AlgoPlonk/tree/main/examples) folder contains some examples of how to use AlgoPlonk that you can run with `go run main.go` in each example subfolder.
 
-Let's follow here the one in `examples/basic`, with some added commentary (but we'll be omitting error checking for brevity, check the full example for that).
+Let's follow here the one in [`examples/basic`](https://github.com/giuliop/AlgoPlonk/tree/main/examples/basic), with some added commentary (but we'll be omitting error checking for brevity, check the full example for that).
 
 After the mandatory imports...
 ```
@@ -154,7 +154,6 @@ The generated smart contract verifiers are [ARC4](https://github.com/algorandfou
 ```
 	@abimethod
 	def make_immutable(self) -> None:
-
 ```
 * `verify` takes as parameters a proof and public inputs as exported by AlgoPlonk and returns `True` if the proof is verifier, `False` otherwise
 ```
@@ -162,10 +161,10 @@ The generated smart contract verifiers are [ARC4](https://github.com/algorandfou
 	def verify(self, proof: ..., public_inputs: ...) -> arc4.Bool:
 ```
 
-#### Next steps
+### Next steps
 Go unleash the power of zero knowledge proofs on Algorand!
 
-Let us now what you create so that we can curate a list of zk application.
+Let us now what you create so that we can curate a list of zk applications.
 
-#### GPG key
-All commits to this repo are signed by the GPG key 81E0FB63130466B782D4859D6C036245DBDB025D
+### GPG key
+All tagged commits to this repo are signed by the GPG key 81E0FB63130466B782D4859D6C036245DBDB025D
