@@ -169,4 +169,4 @@ Go unleash the power of zero knowledge proofs on Algorand!
 Let us now what you create so that we can curate a list of zk applications.
 
 ### GPG key
-All tagged commits to this repo are signed by the GPG key 81E0FB63130466B782D4859D6C036245DBDB025D
+All release tags are signed by the GPG key 81E0FB63130466B782D4859D6C036245DBDB025D

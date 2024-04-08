@@ -31,7 +31,7 @@ func Run(ccs constraint.ConstraintSystem, curve ecc.ID, setup Conf) (
 	plonk.ProvingKey, plonk.VerifyingKey, error) {
 
 	numGates := uint64(ccs.GetNbConstraints() + ccs.GetNbPublicVariables())
-	numGates = ecc.NextPowerOfTwo(numGates)
+	numGates = ecc.NextPowerOfTwo(numGates) + 3
 
 	var srs kzg.SRS
 	var err error
@@ -39,15 +39,15 @@ func Run(ccs constraint.ConstraintSystem, curve ecc.ID, setup Conf) (
 	switch curve {
 	case ecc.BLS12_381:
 		if setup == Trusted {
-			srs, err = trustedSetupBLS12381(numGates + 5)
+			srs, err = trustedSetupBLS12381(numGates)
 		} else if setup == TestOnly {
-			srs, err = kzg_bls12381.NewSRS(numGates+5, big.NewInt(-1))
+			srs, err = kzg_bls12381.NewSRS(numGates, big.NewInt(-1))
 		}
 	case ecc.BN254:
 		if setup == Trusted {
 			return nil, nil, fmt.Errorf("trusted setup not available for BN254")
 		} else if setup == TestOnly {
-			srs, err = kzg_bn254.NewSRS(numGates+5, big.NewInt(-1))
+			srs, err = kzg_bn254.NewSRS(numGates, big.NewInt(-1))
 		}
 	default:
 		return nil, nil, fmt.Errorf("unsupported curve: %v", curve)
