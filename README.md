@@ -24,14 +24,13 @@ Note that at the moment AlgoPlonk does not support custom gates.
 
 ### Trusted Setup
 
-AlgoPlonk provides an out of the box trusted setup for bls12-381 verifiers using the [Ethereum KZG Ceremony](https://github.com/ethereum/kzg-ceremony), which saw over 140,000 participants in an open, decentralized, robustly audited ceremony.
-This trusted setup can support circuits with up to 2^15 (32,768) gates.
+AlgoPlonk provides an out of the box trusted setup for both bls12-381 and bn256 verifiers using the [Ethereum KZG Ceremony](https://github.com/ethereum/kzg-ceremony) and the [Perpetual Powers of Tau Ceremony](https://github.com/privacy-scaling-explorations/perpetualpowersoftau), respectively.
+
+The included trusted setup can support circuits with a number of constraints up to 2^14 (16K) for bls12-381, and 2^17 (128k) for bn254, and the latter could be extended to circuits of up to 128M constraints if needed.
 
 Check the [`doc.go`](https://github.com/giuliop/AlgoPlonk/blob/main/setup/doc.go) file in the setup package for more details.
 
-For bn254 verifiers no trusted setup is provided out of the box at the moment.
-
-For both bn254 and bls12-381 AlgoPlonk provides a test-only setup for circuits of any number of gates. This is of course NOT SUITABLE FOR PRODUCTION.
+AlgoPlonk also provides test-only setups for circuits of any number of gates. These are NOT SUITABLE FOR PRODUCTION.
 
 ### How to use AlgoPlonk
 

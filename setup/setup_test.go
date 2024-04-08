@@ -6,7 +6,27 @@ import (
 	"testing"
 
 	bls12381 "github.com/consensys/gnark-crypto/ecc/bls12-381"
+	"github.com/consensys/gnark-crypto/ecc/bn254"
 )
+
+func TestTrustedSetupBN254(t *testing.T) {
+	const size = 5
+	srs, err := trustedSetupBN254(size)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if len(srs.Pk.G1) != size {
+		t.Errorf("expected %d G1 elements, got %d", size, len(srs.Pk.G1))
+	}
+	// check srs.Pk.G1[0], srs.Vk.G2[0] are the G1, G2 bn254 generators
+	_, _, g1Gen, g2Gen := bn254.Generators()
+	if !srs.Pk.G1[0].Equal(&g1Gen) {
+		t.Errorf("different g1 generator: %v | %v", srs.Pk.G1[0], g1Gen)
+	}
+	if !srs.Vk.G2[0].Equal(&g2Gen) {
+		t.Errorf("different g2 generator: %v | %v", srs.Vk.G2[0], g2Gen)
+	}
+}
 
 func TestTrustedSetupBLS12381(t *testing.T) {
 	const size = 5
@@ -46,7 +66,7 @@ func TestTrustedSetupBLS12381(t *testing.T) {
 	}
 
 	// check srs.Pk.G1[0], srs.Vk.G2[0] are the G1, G2 bls12-381 generators
-	g1Gen, g2Gen := GetBLS12_381_Generators()
+	_, _, g1Gen, g2Gen := bls12381.Generators()
 	if !srs.Pk.G1[0].Equal(&g1Gen) {
 		t.Errorf("different g1 generator: %v | %v", srs.Pk.G1[0], g1Gen)
 	}
@@ -138,30 +158,4 @@ func zeroFirstThreeBits(hexString string) string {
 	newHexString := "0x" + hex.EncodeToString(hexBytes)
 
 	return newHexString
-}
-
-// GetG1GenAffine returns the generator of the G1 group in affine coordinates.
-// it is copied from gnark-crypto/ecc/bls12-381 since it does not export it
-func GetBLS12_381_Generators() (bls12381.G1Affine, bls12381.G2Affine) {
-
-	var g1Gen bls12381.G1Jac
-	var g2Gen bls12381.G2Jac
-	var g1GenAff bls12381.G1Affine
-	var g2GenAff bls12381.G2Affine
-
-	g1Gen.X.SetString("3685416753713387016781088315183077757961620795782546409894578378688607592378376318836054947676345821548104185464507")
-	g1Gen.Y.SetString("1339506544944476473020471379941921221584933875938349620426543736416511423956333506472724655353366534992391756441569")
-	g1Gen.Z.SetOne()
-
-	g2Gen.X.SetString("352701069587466618187139116011060144890029952792775240219908644239793785735715026873347600343865175952761926303160",
-		"3059144344244213709971259814753781636986470325476647558659373206291635324768958432433509563104347017837885763365758")
-	g2Gen.Y.SetString("1985150602287291935568054521177171638300868978215655730859378665066344726373823718423869104263333984641494340347905",
-		"927553665492332455747201965776037880757740193453592970025027978793976877002675564980949289727957565575433344219582")
-	g2Gen.Z.SetString("1",
-		"0")
-
-	g1GenAff.FromJacobian(&g1Gen)
-	g2GenAff.FromJacobian(&g2Gen)
-
-	return g1GenAff, g2GenAff
 }

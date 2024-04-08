@@ -10,6 +10,7 @@ import (
 	"github.com/consensys/gnark-crypto/ecc"
 	bls12381 "github.com/consensys/gnark-crypto/ecc/bls12-381"
 	kzg_bls12381 "github.com/consensys/gnark-crypto/ecc/bls12-381/kzg"
+	"github.com/consensys/gnark-crypto/ecc/bn254"
 	kzg_bn254 "github.com/consensys/gnark-crypto/ecc/bn254/kzg"
 	"github.com/consensys/gnark-crypto/kzg"
 	"github.com/consensys/gnark/backend/plonk"
@@ -45,7 +46,7 @@ func Run(ccs constraint.ConstraintSystem, curve ecc.ID, setup Conf) (
 		}
 	case ecc.BN254:
 		if setup == Trusted {
-			return nil, nil, fmt.Errorf("trusted setup not available for BN254")
+			srs, err = trustedSetupBN254(numGates)
 		} else if setup == TestOnly {
 			srs, err = kzg_bn254.NewSRS(numGates, big.NewInt(-1))
 		}
@@ -60,10 +61,10 @@ func Run(ccs constraint.ConstraintSystem, curve ecc.ID, setup Conf) (
 	return plonk.Setup(ccs, srs)
 }
 
-//go:embed bls12_381/pk.bin bls12_381/vk.bin
+//go:embed bls12_381/pk.bin bls12_381/vk.bin bn254/pk.bin bn254/vk.bin
 var embeddedFiles embed.FS
 
-// trustedSetupBLS12381 returns trusted parameters for BLS12-381.
+// trustedSetupBLS12381 returns trusted parameters for BLS12-381
 func trustedSetupBLS12381(size uint64) (*kzg_bls12381.SRS, error) {
 	if size < 2 {
 		return nil, fmt.Errorf("size must be at least 2")
@@ -92,6 +93,43 @@ func trustedSetupBLS12381(size uint64) (*kzg_bls12381.SRS, error) {
 	srs.Pk.ReadFrom(bytes.NewReader(G1s))
 
 	vkData, err := embeddedFiles.ReadFile("bls12_381/vk.bin")
+	if err != nil {
+		return nil, fmt.Errorf("error opening vk.bin file: %v", err)
+	}
+	srs.Vk.ReadFrom(bytes.NewReader(vkData))
+
+	return &srs, nil
+}
+
+// trustedSetupBN254 returns trusted parameters for BN254
+func trustedSetupBN254(size uint64) (*kzg_bn254.SRS, error) {
+	if size < 2 {
+		return nil, fmt.Errorf("size must be at least 2")
+	}
+	var srs kzg_bn254.SRS
+
+	G1s, err := embeddedFiles.ReadFile("bn254/pk.bin")
+	if err != nil {
+		return nil, fmt.Errorf("error opening pk.bin file: %v", err)
+	}
+
+	// the first 4 bytes of the file are the size of the G1 array
+	G1s = G1s[:4+size*bn254.SizeOfG1AffineCompressed]
+
+	LenG1Params := G1s[:4]
+	LenG1ParamsN := uint64(binary.BigEndian.Uint32(LenG1Params))
+	if LenG1ParamsN < size {
+		return nil, fmt.Errorf("you required %d G1 parameters, but only %d are "+
+			"available", size, LenG1ParamsN)
+	}
+
+	newSize := make([]byte, 4)
+	binary.BigEndian.PutUint32(newSize, uint32(size))
+	copy(G1s[:4], newSize)
+
+	srs.Pk.ReadFrom(bytes.NewReader(G1s))
+
+	vkData, err := embeddedFiles.ReadFile("bn254/vk.bin")
 	if err != nil {
 		return nil, fmt.Errorf("error opening vk.bin file: %v", err)
 	}

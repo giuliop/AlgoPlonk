@@ -15,20 +15,23 @@ maliciously.
 In addition, the software used to run the procedure must be audited carefully, to avoid bugs.
 
 For the bls12-381 curve, the largest distributed ceremony has been run by the Ethereum Foundation
-to implement Proto-danksharding (aka EIP-4844), with over 140,000 participants and rigorous auditing.
-We use these parameters to secure BLS12-381 proof systems.
-These parameters support circuits with up to 2^15 (32768) constraints.
+to implement Proto-danksharding (EIP-4844), with over 140,000 participants and rigorous auditing.
+AlgoPlonk uses these parameters to secure BLS12-381 proof systems which can support circuits up to
+2^14 (16,384) constraints.
 
-You can learn more about the procedure here:
+Learn more about the ceremony here:
 https://ceremony.ethereum.org/
 https://github.com/ethereum/kzg-ceremony
 
-To audit the trusted parameters used in this library and verify they match the original source refer
-to the doc.go file in the bls12-381 subfolder.
+For the bn254 curve, AlgoPlonk includes the parameters from the battle tested perpetual
+“powers-of-tau” ceremony used by projects such as Semaphore, Hermez, Torndado Cash and snarkjs.
+The parameters included in AlgoPlonk support circuits up to 2^17 (128k) constraints, but the
+ceremony provided parameters that can support up to 2^27 (128M) constraints which could be added.
 
-For the bn254 curve, at the moment no trusted setup is included. You can use bn254 in test only mode
-and an (insecure) setup will be generated for any number of constraints. Suitable for testing but
-not for production.
+Learn more about the ceremony here:
+https://github.com/privacy-scaling-explorations/perpetualpowersoftau
+
+To audit the trusted parameters used in this library and verify they match the original source,
+refer to the doc.go file in the bls12-381 and bn254 subfolders.
 */
-
 package setup

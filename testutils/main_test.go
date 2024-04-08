@@ -93,13 +93,7 @@ func TestCircuitBothCurves(t *testing.T) {
 		publicInputsFilename := filepath.Join(artefactsFolder,
 			verifierName+".public_inputs")
 
-		var compiledCircuit *ap.CompiledCircuit
-		var err error
-		if curve == ecc.BLS12_381 {
-			compiledCircuit, err = ap.Compile(&circuit, curve, setup.Trusted)
-		} else {
-			compiledCircuit, err = ap.Compile(&circuit, curve, setup.TestOnly)
-		}
+		compiledCircuit, err := ap.Compile(&circuit, curve, setup.Trusted)
 		if err != nil {
 			t.Fatalf("\nerror compiling circuit: %v", err)
 		}
