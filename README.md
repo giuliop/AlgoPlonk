@@ -2,6 +2,8 @@
 
 ## The power of zero knowledge proofs on the Algorand blockchain.
 
+> **Disclaimer:** AlgoPlonk is a new project and  should be used with caution in production environments. Feedback and contributions are welcome as we work to advance the state of zero knowledge proofs on the Algorand blockchain.
+
 AlgoPlonk automatically generates a smart contract verifier from a zk circuit definition. It integrates with the [gnark](https://github.com/Consensys/gnark) toolchain, so you can use [gnark](https://github.com/Consensys/gnark) to define a plonk based zk circuit and to generate proofs for it, and use AlgoPlonk to generate an Algorand smart contract verifier that can verify those proofs.
 
 
