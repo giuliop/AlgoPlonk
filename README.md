@@ -26,7 +26,7 @@ Note that at the moment AlgoPlonk does not support custom gates.
 
 AlgoPlonk provides an out of the box trusted setup for both bls12-381 and bn256 verifiers using the [Ethereum KZG Ceremony](https://github.com/ethereum/kzg-ceremony) and the [Perpetual Powers of Tau Ceremony](https://github.com/privacy-scaling-explorations/perpetualpowersoftau), respectively.
 
-The included trusted setup can support circuits with a number of constraints up to 2^14 (16K) for bls12-381, and 2^17 (128k) for bn254, and the latter could be extended to circuits of up to 128M constraints if needed.
+The included trusted setup can support circuits with a number of constraints up to 2^14 (16K) for bls12-381, and 2^17 (128k) for bn254, and the latter could be extended to circuits of up to 128M constraints in the future leveraging additional parameters from the [Perpetual Powers of Tau Ceremony](https://github.com/privacy-scaling-explorations/perpetualpowersoftau).
 
 Check the [`doc.go`](https://github.com/giuliop/AlgoPlonk/blob/main/setup/doc.go) file in the setup package for more details.
 
@@ -99,9 +99,10 @@ And puyapy will generate these files compiling BasicVerifier.py:
 
 	verifierName := "BasicVerifier"
 
-	puyaVerifierFilename := artefactsFolder + verifierName + ".py"
-	proofFilename := artefactsFolder + verifierName + ".proof"
-	publicInputsFilename := artefactsFolder + verifierName + ".public_inputs"
+	puyaVerifierFilename := filepath.Join(artefactsFolder, verifierName+".py")
+	proofFilename := filepath.Join(artefactsFolder, verifierName+".proof")
+	publicInputsFilename := filepath.Join(artefactsFolder,
+	    verifierName+".public_inputs")
 ```
 Let's choose a curve, we use bls12-381 here, and compile the circuit.
 Then we write to file the python code for the smart contract verifier with `WritePuyaPyVerifier` and finally we compile it to teal files
@@ -120,14 +121,15 @@ Yes! We are ready to rock n' roll now, let's create a proof and export it to fil
 ```
 	verifiedProof, err := compiledCircuit.Verify(&assignment)
 	err = verifiedProof.WriteProofAndPublicInputs(proofFilename,
-		publicInputsFilename)
+	    publicInputsFilename)
 ```
 We simulate a call to the `verify` method of the verifier contract passing the generated proof and public inputs as parameters.
 ```
 	simulate := true
-	schema, err := testutils.ReadArc32Schema(artefactsFolder +
-		verifierName + ".arc32.json")
-	result, err := testutils.CallVerifyMethod(app_id, nil, proofFilename, publicInputsFilename, schema, simulate)
+	schema, err := testutils.ReadArc32Schema(filepath.Join(artefactsFolder,
+	    verifierName+".arc32.json"))
+	result, err := testutils.CallVerifyMethod(app_id, nil, proofFilename,
+	    publicInputsFilename, schema, simulate)
 
 	fmt.Printf("Verifier app returned: %v\n", result.ReturnValue)
 }
