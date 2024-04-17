@@ -16,17 +16,24 @@ The typical workflow is the following:
 
 ### Supported curves
 
-AlgoPlonk supports the curves for which the AVM offers elliptic curve operations: bn254 and bls12-381.
-
-A bn254 verifier consumes ~145,000 opcode budget, a bls12-381 verifier ~185,000.
-
+AlgoPlonk supports the curves for which the AVM offers elliptic curve operations: BN254 and BLS12-381.
 Note that at the moment AlgoPlonk does not support custom gates.
+
+### Practical considerations
+
+A BN254 verifier consumes ~145,000 opcode budget, a BLS12-381 verifier ~185,000.
+Since these are smart contracts and currently there is a max pooled limit of ~180,000 opcode budget for smart contracts on the AVM, only the BN254 verifier can be used in practice at the moment.
+
+Research is ongoing to see if it is possible to make the verifiers as smart signatures, since they enjoy a max pooled limit of 320,000.
+Also, the limits on the AVM might increase in the future, making a BLS12-381 smart contract verifier practical.
+
+For now use BN254 verifiers.
 
 ### Trusted Setup
 
-AlgoPlonk provides an out of the box trusted setup for both bls12-381 and bn256 verifiers using the [Ethereum KZG Ceremony](https://github.com/ethereum/kzg-ceremony) and the [Perpetual Powers of Tau Ceremony](https://github.com/privacy-scaling-explorations/perpetualpowersoftau), respectively.
+AlgoPlonk provides an out of the box trusted setup for both BLS12-381 and bn256 verifiers using the [Ethereum KZG Ceremony](https://github.com/ethereum/kzg-ceremony) and the [Perpetual Powers of Tau Ceremony](https://github.com/privacy-scaling-explorations/perpetualpowersoftau), respectively.
 
-The included trusted setup can support circuits with a number of constraints up to 2^14 (16K) for bls12-381, and 2^17 (128k) for bn254, and the latter could be extended to circuits of up to 128M constraints in the future leveraging additional parameters from the [Perpetual Powers of Tau Ceremony](https://github.com/privacy-scaling-explorations/perpetualpowersoftau).
+The included trusted setup can support circuits with a number of constraints up to 2^14 (16K) for BLS12-381, and 2^17 (128k) for BN254, and the latter could be extended to circuits of up to 128M constraints in the future leveraging additional parameters from the [Perpetual Powers of Tau Ceremony](https://github.com/privacy-scaling-explorations/perpetualpowersoftau).
 
 Check the [`doc.go`](https://github.com/giuliop/AlgoPlonk/blob/main/setup/doc.go) file in the setup package for more details.
 
@@ -45,6 +52,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"path/filepath"
 
 	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/frontend"
@@ -104,7 +112,7 @@ And puyapy will generate these files compiling BasicVerifier.py:
 	publicInputsFilename := filepath.Join(artefactsFolder,
 	    verifierName+".public_inputs")
 ```
-Let's choose a curve, we use bls12-381 here, and compile the circuit.
+Let's choose a curve, we use BLS12-381 here, and compile the circuit.
 Then we write to file the python code for the smart contract verifier with `WritePuyaPyVerifier` and finally we compile it to teal files
 ```
 	curve := ecc.BLS12_381

@@ -1,4 +1,7 @@
 // package tests contains tests and test helper functions
+// To run the tests, a local network with default configuration is expected
+// to be running.
+// You can use algokit to start one with `algokit localnet start`
 package testutils
 
 import (
