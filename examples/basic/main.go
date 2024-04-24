@@ -18,6 +18,7 @@ import (
 	ap "github.com/giuliop/algoplonk"
 	"github.com/giuliop/algoplonk/setup"
 	"github.com/giuliop/algoplonk/testutils"
+	sdk "github.com/giuliop/algoplonk/testutils/algosdkwrapper"
 )
 
 // BasicCircuit is a simple circuit that given public variables 'a' and 'b',
@@ -79,7 +80,7 @@ func main() {
 
 	fmt.Printf("\nDeploying verifier app to local network with name `%s`\n",
 		verifierName)
-	app_id, err := testutils.DeployArc4AppIfNeeded(verifierName, artefactsFolder)
+	app_id, err := sdk.DeployArc4AppIfNeeded(verifierName, artefactsFolder)
 	if err != nil {
 		log.Fatalf("error deploying verifier app to local network: %v", err)
 	}
@@ -100,12 +101,12 @@ func main() {
 
 	fmt.Println("\nSimulating calling verifier app to verify proof")
 	simulate := true
-	schema, err := testutils.ReadArc32Schema(filepath.Join(artefactsFolder,
+	schema, err := sdk.ReadArc32Schema(filepath.Join(artefactsFolder,
 		verifierName+".arc32.json"))
 	if err != nil {
 		log.Fatalf("failed to read application schema: %s", err)
 	}
-	result, err := testutils.CallVerifyMethod(app_id, nil, proofFilename,
+	result, err := sdk.CallVerifyMethod(app_id, nil, proofFilename,
 		publicInputsFilename, schema, simulate)
 	if err != nil {
 		log.Fatalf("error calling verifier app: %v", err)

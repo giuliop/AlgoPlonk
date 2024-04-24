@@ -18,6 +18,7 @@ import (
 	"github.com/consensys/gnark/std/hash/mimc"
 	ap "github.com/giuliop/algoplonk"
 	"github.com/giuliop/algoplonk/setup"
+	sdk "github.com/giuliop/algoplonk/testutils/algosdkwrapper"
 )
 
 const (
@@ -119,19 +120,19 @@ func TestCircuitBothCurves(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		app_id, err := DeployArc4AppIfNeeded(verifierName, artefactsFolder)
+		app_id, err := sdk.DeployArc4AppIfNeeded(verifierName, artefactsFolder)
 		if err != nil {
 			t.Fatalf("error deploying verifier app to local network: %v", err)
 		}
 
 		simulate := true
-		schema, err := ReadArc32Schema(filepath.Join(artefactsFolder,
+		schema, err := sdk.ReadArc32Schema(filepath.Join(artefactsFolder,
 			verifierName+".arc32.json"))
 
 		if err != nil {
 			t.Fatalf("failed to read application schema: %s", err)
 		}
-		result, err := CallVerifyMethod(app_id, nil, proofFilename,
+		result, err := sdk.CallVerifyMethod(app_id, nil, proofFilename,
 			publicInputsFilename, schema, simulate)
 		if err != nil {
 			t.Fatalf("error calling verifier app: %v", err)
@@ -169,25 +170,25 @@ func TestAVMVerifierMutability(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	app_id, err := DeployArc4AppIfNeeded(verifierName, artefactsFolder)
+	app_id, err := sdk.DeployArc4AppIfNeeded(verifierName, artefactsFolder)
 	if err != nil {
 		t.Fatalf("error deploying verifier app to local network: %v", err)
 	}
 
-	schema, err := ReadArc32Schema(filepath.Join(artefactsFolder, verifierName+".arc32.json"))
+	schema, err := sdk.ReadArc32Schema(filepath.Join(artefactsFolder, verifierName+".arc32.json"))
 
 	if err != nil {
 		t.Fatalf("failed to read application schema: %s", err)
 	}
 
-	_, err = ExecuteAbiCall(app_id, nil, schema, "make_immutable",
+	_, err = sdk.ExecuteAbiCall(app_id, nil, schema, "make_immutable",
 		types.NoOpOC, nil)
 	if err != nil {
 		t.Fatalf("error making verifier app immutable: %v", err)
 	}
 
 	// let's try to delete the verifier app, it should fail
-	_, err = ExecuteAbiCall(app_id, nil, schema, "update", types.DeleteApplicationOC, nil)
+	_, err = sdk.ExecuteAbiCall(app_id, nil, schema, "update", types.DeleteApplicationOC, nil)
 	if err == nil {
 		t.Fatalf("deleting immutable verifier app should have failed")
 	}
