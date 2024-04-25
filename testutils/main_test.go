@@ -19,6 +19,7 @@ import (
 	ap "github.com/giuliop/algoplonk"
 	"github.com/giuliop/algoplonk/setup"
 	sdk "github.com/giuliop/algoplonk/testutils/algosdkwrapper"
+	"github.com/giuliop/algoplonk/verifier"
 )
 
 const (
@@ -115,7 +116,12 @@ func TestCircuitBothCurves(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		err = CompileWithPuyapy(verifierName, artefactsFolder)
+		err = CompileWithPuyaPy(puyaVerifierFilename, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = RenamePuyaPyOutput(verifier.VerifierContractName,
+			verifierName, artefactsFolder)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -165,7 +171,12 @@ func TestAVMVerifierMutability(t *testing.T) {
 		t.Fatalf("error writing PuyaPy verifier: %v", err)
 	}
 
-	err = CompileWithPuyapy(verifierName, artefactsFolder)
+	err = CompileWithPuyaPy(puyaVerifierFilename, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = RenamePuyaPyOutput(verifier.VerifierContractName,
+		verifierName, artefactsFolder)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,13 +193,14 @@ func TestAVMVerifierMutability(t *testing.T) {
 	}
 
 	_, err = sdk.ExecuteAbiCall(app_id, nil, schema, "make_immutable",
-		types.NoOpOC, nil)
+		types.NoOpOC, nil, nil)
 	if err != nil {
 		t.Fatalf("error making verifier app immutable: %v", err)
 	}
 
 	// let's try to delete the verifier app, it should fail
-	_, err = sdk.ExecuteAbiCall(app_id, nil, schema, "update", types.DeleteApplicationOC, nil)
+	_, err = sdk.ExecuteAbiCall(app_id, nil, schema, "update",
+		types.DeleteApplicationOC, nil, nil)
 	if err == nil {
 		t.Fatalf("deleting immutable verifier app should have failed")
 	}

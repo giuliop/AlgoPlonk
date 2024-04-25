@@ -71,7 +71,7 @@ func DeployArc4AppIfNeeded(appName string, dir string) (
 				appName)
 			sp, err := algodClient.SuggestedParams().Do(context.Background())
 			if err != nil {
-				return 0, fmt.Errorf("failed to make delete txn: %v", err)
+				return 0, fmt.Errorf("failed to get suggested params : %v", err)
 			}
 			deleteMethod, err := schema.Contract.GetMethodByName("update")
 			if err != nil {
@@ -94,7 +94,7 @@ func DeployArc4AppIfNeeded(appName string, dir string) (
 	// create app
 	sp, err := algodClient.SuggestedParams().Do(context.Background())
 	if err != nil {
-		return 0, fmt.Errorf("error getting suggested txn params: %v", err)
+		return 0, fmt.Errorf("failed to get suggested params: %v", err)
 	}
 	createMethod, err := schema.Contract.GetMethodByName("create")
 	if err != nil {
@@ -188,6 +188,7 @@ func CompileTealFromFile(tealFile string) ([]byte, error) {
 }
 
 // SendTxn signs and sends a transaction to the network.
+// If no account is provided, it uses the default localnet account.
 // A local network must be running
 func SendTxn(txn types.Transaction, account *crypto.Account) (
 	*models.PendingTransactionInfoResponse, error) {
@@ -260,7 +261,7 @@ func CallVerifyMethod(appId uint64, account *crypto.Account, proofFilename strin
 	}
 	sp, err := algodClient.SuggestedParams().Do(context.Background())
 	if err != nil {
-		return nil, fmt.Errorf("failed to get suggested txn params: %v", err)
+		return nil, fmt.Errorf("failed to get suggested params: %v", err)
 	}
 	verifyMethod, err := schema.Contract.GetMethodByName("verify")
 	if err != nil {
@@ -317,7 +318,8 @@ func CallVerifyMethod(appId uint64, account *crypto.Account, proofFilename strin
 // ExecuteAbiCall calls an abi method on an app.
 // A local network must be running
 func ExecuteAbiCall(appId uint64, account *crypto.Account, schema *Arc32Schema,
-	methodName string, oc types.OnCompletion, methodArgs []interface{}) (
+	methodName string, oc types.OnCompletion, methodArgs []interface{},
+	boxes []types.AppBoxReference) (
 	*transaction.ExecuteResult, error) {
 
 	algodClient := GetAlgodClient()
@@ -331,7 +333,7 @@ func ExecuteAbiCall(appId uint64, account *crypto.Account, schema *Arc32Schema,
 	}
 	sp, err := algodClient.SuggestedParams().Do(context.Background())
 	if err != nil {
-		return nil, fmt.Errorf("failed to get suggested txn params: %v", err)
+		return nil, fmt.Errorf("failed to get suggested params: %v", err)
 	}
 	method, err := schema.Contract.GetMethodByName(methodName)
 	if err != nil {
@@ -348,13 +350,14 @@ func ExecuteAbiCall(appId uint64, account *crypto.Account, schema *Arc32Schema,
 		Signer:          signer,
 		Method:          method,
 		MethodArgs:      methodArgs,
+		BoxReferences:   boxes,
 	}
 	if err := atc.AddMethodCall(txnParams); err != nil {
 		return nil, fmt.Errorf("failed to add method call: %v", err)
 	}
 	res, err := atc.Execute(algodClient, context.Background(), 4)
 	if err != nil {
-		return nil, fmt.Errorf("failed to execute make_immutable txn: %v", err)
+		return nil, fmt.Errorf("failed to execute txn: %v", err)
 	}
 	return &res, nil
 }
@@ -364,10 +367,40 @@ func ExecuteAbiCall(appId uint64, account *crypto.Account, schema *Arc32Schema,
 func GetDefaultAccount() (account *crypto.Account, err error) {
 	accts, err := GetSandboxAccounts()
 	if err != nil {
-		return account, fmt.Errorf("failed to get localnet accounts: %s.\n"+
+		return nil, fmt.Errorf("failed to get localnet accounts: %s.\n"+
 			"Make sure you are running a local Algorand network with default "+
-			"parameters:\nalgod_url -> %s\nalgod_token -> %s",
-			err, ALGOD_URL, ALGOD_TOKEN)
+			"parameters or have setup correct custom parameters", err)
 	}
 	return &accts[0], nil
+}
+
+// EnsureFunded checks if the given address has at leastrminBalance microalgos
+// and if not funds it with twice the amount from the default account.
+// A local network must be running
+func EnsureFunded(address string, min uint64) {
+	algodClient := GetAlgodClient()
+	account, err := algodClient.AccountInformation(address).Do(
+		context.Background())
+	if err != nil {
+		log.Fatalf("failed to get account information: %v", err)
+	}
+	if account.Amount < uint64(min) {
+		account, err := GetDefaultAccount()
+		if err != nil {
+			log.Fatalf("failed to get localnet default account: %v", err)
+		}
+		sp, err := algodClient.SuggestedParams().Do(context.Background())
+		if err != nil {
+			log.Fatalf("failed to get suggested params: %v", err)
+		}
+		txn, err := transaction.MakePaymentTxn(account.Address.String(),
+			address, 2*min, nil, types.ZeroAddress.String(), sp)
+		if err != nil {
+			log.Fatalf("failed to make payment txn: %v", err)
+		}
+		_, err = SendTxn(txn, account)
+		if err != nil {
+			log.Fatalf("error sending payment transaction:  %v", err)
+		}
+	}
 }

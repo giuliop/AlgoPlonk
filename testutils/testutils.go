@@ -12,6 +12,7 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"strings"
 
 	ap "github.com/giuliop/algoplonk"
 	"github.com/giuliop/algoplonk/setup"
@@ -23,33 +24,60 @@ import (
 	"os/exec"
 )
 
-// CompileWithPuyapy compiles a python file with puyapy.
-// Takes a name, which is the file name without the .py extension and the
-// path to the directory where the file is located.
-// It renames puyapy output files to match name, substituting the standard
-// "Contract" prefix with name
-func CompileWithPuyapy(name string, dir string) error {
-	filename := filepath.Join(dir, name+".py")
-	cmd := exec.Command("algokit", "compile", "py", filename)
-	fmt.Printf("algokit compile py %s\n", filename)
+// CompileWithPuyaPy compiles `filename` with puyapy, with `options'.
+// Leave `options` empty to not pass any options
+func CompileWithPuyaPy(filename string, options string) error {
+	args := []string{"compile", "py", filename}
+	if options != "" {
+		args = append(args, options)
+	}
+	cmd := exec.Command("algokit", args...)
+	fmt.Printf("algokit %s\n", strings.Join(args, " "))
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("%s\ncompilation failed : %s", out, err)
 	}
-	err = os.Rename(filepath.Join(dir, "Contract.approval.teal"),
-		filepath.Join(dir, name+".approval.teal"))
-	if err != nil {
-		return fmt.Errorf("failed to rename approval program: %v", err)
+	return nil
+}
+
+// RenamePuyaPyOutput renames puyapy output files, e.g.,
+// 'oldname.approval.teal' is renamed to 'newname.approval.teal'.
+// It looks in `dir` for the files to rename, looking for these files:
+// oldname.approval.teal, oldname.clear.teal, oldname.arc32.json, oldname.teal
+func RenamePuyaPyOutput(oldname string, newname string, dir string) error {
+	suffixes := []string{"approval.teal", "clear.teal", "arc32.json", "teal"}
+	for _, suffix := range suffixes {
+		oldfile := filepath.Join(dir, oldname+"."+suffix)
+		_, err := os.Stat(oldfile)
+		switch {
+		case err == nil:
+			newfile := filepath.Join(dir, newname+"."+suffix)
+			if err := os.Rename(oldfile, newfile); err != nil {
+				return fmt.Errorf("failed to rename %s: %v", oldfile, err)
+			}
+		case os.IsNotExist(err):
+			continue
+		default:
+			return fmt.Errorf("error accessing %s: %v", oldfile, err)
+		}
 	}
-	err = os.Rename(filepath.Join(dir, "Contract.clear.teal"),
-		filepath.Join(dir, name+".clear.teal"))
+	return nil
+}
+
+// Substitute replaces all instances of `mapping` keys with their values
+// overwriting `filename`
+func Substitute(filename string, mapping map[string]string) error {
+	program, err := os.ReadFile(filename)
 	if err != nil {
-		return fmt.Errorf("failed to rename clear program: %v", err)
+		return fmt.Errorf("error reading %s: %v", filename, err)
 	}
-	err = os.Rename(filepath.Join(dir, "Contract.arc32.json"),
-		filepath.Join(dir, name+".arc32.json"))
+	for key, value := range mapping {
+		program = []byte(strings.ReplaceAll(string(program), key, value))
+	}
+	// overwrite the file
+	err = os.WriteFile(filename, program, 0644)
 	if err != nil {
-		return fmt.Errorf("failed to rename arc32 schema: %v", err)
+		return fmt.Errorf("error writing %s: %v", filename, err)
 	}
 	return nil
 }
@@ -103,6 +131,7 @@ func TestCircuitWithGnark(circuit frontend.Circuit, assignment frontend.Circuit,
 	return cc, &ap.VerifiedProof{Proof: proof, Witness: witness}, nil
 }
 
+// CreateDirectoryIfNeeded creates `dir` if it does not exist
 func CreateDirectoryIfNeeded(dir string) error {
 	info, err := os.Stat(dir)
 	if os.IsNotExist(err) {
@@ -114,4 +143,22 @@ func CreateDirectoryIfNeeded(dir string) error {
 		return fmt.Errorf("file %s exists but is not a directory", dir)
 	}
 	return nil
+}
+
+// ShouldRecompile returns true if sourcePath is more recent than outputPath
+// or if it encounters an error
+func ShouldRecompile(sourcePath, outputPath string) bool {
+	sourceFile, err := os.Stat(sourcePath)
+	if err != nil {
+		return true
+	}
+	sourceModTime := sourceFile.ModTime()
+
+	outputFile, err := os.Stat(outputPath)
+	if err != nil {
+		return true
+	}
+	outputModTime := outputFile.ModTime()
+
+	return sourceModTime.After(outputModTime)
 }

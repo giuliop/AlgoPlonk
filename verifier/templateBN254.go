@@ -31,7 +31,7 @@ G1_SRS_Y = {{ fpstr .Kzg.G1.Y }}
 
 ######################################################
 
-class Contract(py.ARC4Contract):
+class {{ (contractName) }}(py.ARC4Contract):
 	@abimethod(create='require')
 	def create(self, name: String) -> None:
 		"""On creation, save application name in global state"""

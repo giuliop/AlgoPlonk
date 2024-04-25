@@ -19,6 +19,7 @@ import (
 	"github.com/giuliop/algoplonk/setup"
 	"github.com/giuliop/algoplonk/testutils"
 	sdk "github.com/giuliop/algoplonk/testutils/algosdkwrapper"
+	"github.com/giuliop/algoplonk/verifier"
 )
 
 // BasicCircuit is a simple circuit that given public variables 'a' and 'b',
@@ -73,7 +74,12 @@ func main() {
 	}
 
 	fmt.Print("\nCompiling verifier app with puyapy: ")
-	err = testutils.CompileWithPuyapy(verifierName, artefactsFolder)
+	err = testutils.CompileWithPuyaPy(puyaVerifierFilename, "")
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = testutils.RenamePuyaPyOutput(verifier.VerifierContractName,
+		verifierName, artefactsFolder)
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -20,6 +20,10 @@ import (
 	plonk_bn254 "github.com/consensys/gnark/backend/plonk/bn254"
 )
 
+// VerifierContractName is the name of the verifier contract.
+// Puyapy will output files starting with this name.
+const VerifierContractName = "Verifier"
+
 // WritePuyapy generates the python code for a verifier contract
 // based on the provided verifying key and writes it to the provided writer.
 // The python code can by compiled to a smart contract using the PuyaPy compiler.
@@ -40,6 +44,9 @@ func WritePuyaPy(vk plonk.VerifyingKey, w io.Writer) error {
 		funcMap = template.FuncMap{
 			"inc": func(i int) int {
 				return i + 1
+			},
+			"contractName": func() string {
+				return VerifierContractName
 			},
 			"frstr": func(x fr_bn254.Element) string {
 				bv := new(big.Int)
@@ -62,6 +69,9 @@ func WritePuyaPy(vk plonk.VerifyingKey, w io.Writer) error {
 		funcMap = template.FuncMap{
 			"inc": func(i int) int {
 				return i + 1
+			},
+			"contractName": func() string {
+				return VerifierContractName
 			},
 			"frstr": func(x fr_bls12381.Element) string {
 				bv := new(big.Int)
