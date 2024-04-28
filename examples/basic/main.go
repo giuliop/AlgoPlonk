@@ -99,7 +99,7 @@ func main() {
 
 	fmt.Printf("\nWriting proof to %s and public inputs to %s\n", proofFilename,
 		publicInputsFilename)
-	err = verifiedProof.WriteProofAndPublicInputs(proofFilename,
+	err = verifiedProof.ExportProofAndPublicInputs(proofFilename,
 		publicInputsFilename)
 	if err != nil {
 		log.Fatal(err)

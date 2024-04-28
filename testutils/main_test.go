@@ -110,7 +110,7 @@ func TestCircuitBothCurves(t *testing.T) {
 			t.Fatalf("error writing PuyaPy verifier: %v", err)
 		}
 
-		err = verifiedProof.WriteProofAndPublicInputs(proofFilename,
+		err = verifiedProof.ExportProofAndPublicInputs(proofFilename,
 			publicInputsFilename)
 		if err != nil {
 			t.Fatal(err)

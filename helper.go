@@ -10,7 +10,7 @@ import (
 )
 
 // marshalProof marshals a plonk proof to a binary blob
-func marshalProof(proof plonk.Proof) []byte {
+func MarshalProof(proof plonk.Proof) []byte {
 	var data []byte
 	switch _proof := proof.(type) {
 	case *plonk_bn254.Proof:
@@ -94,8 +94,8 @@ func marshalPlonkBls12381Proof(proof *plonk_bls12381.Proof) []byte {
 	return res
 }
 
-// extractPublicInputs extracts public inputs from a witness to a binary blob
-func extractPublicInputs(witness witness.Witness) ([]byte, error) {
+// MarshalPublicInputs extracts public inputs from a witness to a binary blob
+func MarshalPublicInputs(witness witness.Witness) ([]byte, error) {
 	public, err := witness.Public()
 	if err != nil {
 		return nil, fmt.Errorf("error extracting public witness: %v", err)

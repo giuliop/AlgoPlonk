@@ -2,6 +2,7 @@ package algoplonk
 
 import (
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/giuliop/algoplonk/setup"
@@ -89,54 +90,54 @@ func (cc *CompiledCircuit) Verify(assignment frontend.Circuit,
 	return &VerifiedProof{proof, witness}, nil
 }
 
-// WriteProofAndPublicInputs writes a proof and its public inputs to files
+// ExportProofAndPublicInputs writes a proof and its public inputs to files
 // as binary blobs for the AVM verifier
-func (vp *VerifiedProof) WriteProofAndPublicInputs(proofFileName string,
+func (vp *VerifiedProof) ExportProofAndPublicInputs(proofFileName string,
 	publicInputsFileName string) error {
-	err := vp.WriteProof(proofFileName)
+
+	proofFile, err := os.Create(proofFileName)
+	if err != nil {
+		return fmt.Errorf("error creating proof file: %v", err)
+	}
+	defer proofFile.Close()
+
+	publicInputsFile, err := os.Create(publicInputsFileName)
+	if err != nil {
+		return fmt.Errorf("error creating public inputs file: %v", err)
+	}
+	defer publicInputsFile.Close()
+
+	err = vp.WriteProof(proofFile)
+	if err != nil {
+		return err
+	}
+	err = vp.WritePublicInputs(publicInputsFile)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// WriteProof writes a proof as a binary blob that can be passed to AVM verifiers
+func (vp *VerifiedProof) WriteProof(w io.Writer) error {
+	data := MarshalProof(vp.Proof)
+	_, err := w.Write(data)
 	if err != nil {
 		return fmt.Errorf("error writing proof: %v", err)
 	}
-	err = vp.WritePublicInputs(publicInputsFileName)
-	if err != nil {
-		return fmt.Errorf("error writing public inputs: %v", err)
-	}
 	return nil
 }
 
-// WriteProof writes a proof to file as a binary blob for the AVM verifier
-func (vp *VerifiedProof) WriteProof(filename string) error {
-	var err error
-	file, err := os.Create(filename)
-	if err != nil {
-		return fmt.Errorf("error creating file: %v", err)
-	}
-	defer file.Close()
-
-	data := marshalProof(vp.Proof)
-	_, err = file.Write(data)
-	if err != nil {
-		return fmt.Errorf("error writing proof to file: %v", err)
-	}
-	return nil
-}
-
-// WritePublicInputs writes the public inputs to file as a binary blob
-// for the AVM verifier
-func (vp *VerifiedProof) WritePublicInputs(filename string) error {
-	file, err := os.Create(filename)
-	if err != nil {
-		return fmt.Errorf("error creating file: %v", err)
-	}
-	defer file.Close()
-
-	data, err := extractPublicInputs(vp.Witness)
+// WritePublicInputs writes the public inputs as a binary blob that can be passed
+// to AVM verifiers
+func (vp *VerifiedProof) WritePublicInputs(w io.Writer) error {
+	data, err := MarshalPublicInputs(vp.Witness)
 	if err != nil {
 		return fmt.Errorf("error extracting public inputs: %v", err)
 	}
-	_, err = file.Write(data)
+	_, err = w.Write(data)
 	if err != nil {
-		return fmt.Errorf("error writing public inputs to file: %v", err)
+		return fmt.Errorf("error writing public inputs: %v", err)
 	}
 	return err
 }
