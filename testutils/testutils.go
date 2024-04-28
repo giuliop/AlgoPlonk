@@ -7,7 +7,9 @@
 package testutils
 
 import (
+	"bytes"
 	"crypto/rand"
+	"encoding/gob"
 	"fmt"
 	"math/big"
 	"os"
@@ -98,6 +100,77 @@ func RandomBigInt(maxBits int64) *big.Int {
 			return n
 		}
 	}
+}
+
+// CompiledCircuitBytes contains the compiled circuit pre-serialized to bytes
+type CompiledCircuitBytes struct {
+	Ccs   []byte
+	Pk    []byte
+	Vk    []byte
+	Curve ecc.ID
+}
+
+// SerializeCompiledCircuit serializes a compiled circuit to file
+func SerializeCompiledCircuit(cc *ap.CompiledCircuit, filename string) error {
+	var ccsB, pkb, vkb bytes.Buffer
+	cc.Ccs.WriteTo(&ccsB)
+	cc.Pk.WriteTo(&pkb)
+	cc.Vk.WriteTo(&vkb)
+
+	c := CompiledCircuitBytes{
+		Ccs:   ccsB.Bytes(),
+		Pk:    pkb.Bytes(),
+		Vk:    vkb.Bytes(),
+		Curve: cc.Curve,
+	}
+	var buf bytes.Buffer
+	enc := gob.NewEncoder(&buf)
+	if err := enc.Encode(c); err != nil {
+		return fmt.Errorf("error encoding compiled circuit: %v", err)
+	}
+
+	err := os.WriteFile(filename, buf.Bytes(), 0644)
+	if err != nil {
+		return fmt.Errorf("error writing compiled circuit to file: %v", err)
+	}
+
+	return nil
+}
+
+// DeserializeCompiledCircuit deserializes a compiled circuit from file
+func DeserializeCompiledCircuit(filename string) (*ap.CompiledCircuit, error) {
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		return nil, fmt.Errorf("error reading compiled circuit file: %v", err)
+	}
+
+	var c CompiledCircuitBytes
+	dec := gob.NewDecoder(bytes.NewReader(data))
+	if err := dec.Decode(&c); err != nil {
+		return nil, fmt.Errorf("error decoding compiled circuit: %v", err)
+	}
+
+	cc := &ap.CompiledCircuit{
+		Ccs:   plonk.NewCS(c.Curve),
+		Pk:    plonk.NewProvingKey(c.Curve),
+		Vk:    plonk.NewVerifyingKey(c.Curve),
+		Curve: c.Curve,
+	}
+	ccsReader := bytes.NewReader(c.Ccs)
+	pkReader := bytes.NewReader(c.Pk)
+	vkReader := bytes.NewReader(c.Vk)
+
+	if _, err := cc.Ccs.ReadFrom(ccsReader); err != nil {
+		return nil, fmt.Errorf("error reading CCS data: %v", err)
+	}
+	if _, err := cc.Pk.ReadFrom(pkReader); err != nil {
+		return nil, fmt.Errorf("error reading PK data: %v", err)
+	}
+	if _, err := cc.Vk.ReadFrom(vkReader); err != nil {
+		return nil, fmt.Errorf("error reading VK data: %v", err)
+	}
+
+	return cc, nil
 }
 
 // TestCircuitWithGnark compiles a circuit and verifies a proof from an assignment
