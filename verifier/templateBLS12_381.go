@@ -55,13 +55,17 @@ class {{ (contractName) }}(py.ARC4Contract):
 
 	@abimethod
 	def verify(self,
-	           proof: StaticArray[Bytes32, typing.Literal[35]],
-			   public_inputs: StaticArray[Bytes32, typing.Literal[{{ .NbPublicVariables }}]]
+	           proof: DynamicArray[Bytes32],
+			   public_inputs: DynamicArray[Bytes32],
 			   ) -> arc4.Bool:
 		"""Verify the proof for the given public inputs.
 		   Return a boolean indicating whether the proof is valid"""
 
 		q = BigUInt(R_MOD)
+
+		# check proof and public inputs lengths
+		assert proof.length == 35
+		assert public_inputs.length == {{ .NbPublicVariables }}
 
 		### Read verifying key ###
 		VK_NB_PUBLIC_INPUTS = UInt64({{ .NbPublicVariables }})
