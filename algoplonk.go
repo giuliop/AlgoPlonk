@@ -52,14 +52,13 @@ func Compile(circuit frontend.Circuit, curve ecc.ID, setupConf setup.Conf) (
 
 // WritePuyaPyVerifier writes to file python code that the PuyaPy compiler can
 // compile to a smart contract verifier for the circuit.
-func (cc *CompiledCircuit) WritePuyaPyVerifier(filename string) error {
-	file, err := os.Create(filename)
+func (cc *CompiledCircuit) WritePuyaPyVerifier(filepath string) error {
+	file, err := os.Create(filepath)
 	if err != nil {
 		return fmt.Errorf("error creating file: %v", err)
 	}
 	defer file.Close()
 
-	// TODO: update WritePuyaPy to take canUpdate and canDelete
 	err = verifier.WritePuyaPy(cc.Vk, file)
 	if err != nil {
 		err = fmt.Errorf("error writing PuyaPy contract: %v", err)
@@ -92,16 +91,16 @@ func (cc *CompiledCircuit) Verify(assignment frontend.Circuit,
 
 // ExportProofAndPublicInputs writes a proof and its public inputs to files
 // as binary blobs for the AVM verifier
-func (vp *VerifiedProof) ExportProofAndPublicInputs(proofFileName string,
-	publicInputsFileName string) error {
+func (vp *VerifiedProof) ExportProofAndPublicInputs(proofFilePath string,
+	publicInputsFilePath string) error {
 
-	proofFile, err := os.Create(proofFileName)
+	proofFile, err := os.Create(proofFilePath)
 	if err != nil {
 		return fmt.Errorf("error creating proof file: %v", err)
 	}
 	defer proofFile.Close()
 
-	publicInputsFile, err := os.Create(publicInputsFileName)
+	publicInputsFile, err := os.Create(publicInputsFilePath)
 	if err != nil {
 		return fmt.Errorf("error creating public inputs file: %v", err)
 	}

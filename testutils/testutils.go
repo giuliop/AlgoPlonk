@@ -26,10 +26,10 @@ import (
 	"os/exec"
 )
 
-// CompileWithPuyaPy compiles `filename` with puyapy, with `options'.
+// CompileWithPuyaPy compiles `filepath` with puyapy, with `options'.
 // Leave `options` empty to not pass any options
-func CompileWithPuyaPy(filename string, options string) error {
-	args := []string{"compile", "py", filename}
+func CompileWithPuyaPy(filepath string, options string) error {
+	args := []string{"compile", "py", filepath}
 	if options != "" {
 		args = append(args, options)
 	}
@@ -67,19 +67,19 @@ func RenamePuyaPyOutput(oldname string, newname string, dir string) error {
 }
 
 // Substitute replaces all instances of `mapping` keys with their values
-// overwriting `filename`
-func Substitute(filename string, mapping map[string]string) error {
-	program, err := os.ReadFile(filename)
+// overwriting `filepath`
+func Substitute(filepath string, mapping map[string]string) error {
+	program, err := os.ReadFile(filepath)
 	if err != nil {
-		return fmt.Errorf("error reading %s: %v", filename, err)
+		return fmt.Errorf("error reading %s: %v", filepath, err)
 	}
 	for key, value := range mapping {
 		program = []byte(strings.ReplaceAll(string(program), key, value))
 	}
 	// overwrite the file
-	err = os.WriteFile(filename, program, 0644)
+	err = os.WriteFile(filepath, program, 0644)
 	if err != nil {
-		return fmt.Errorf("error writing %s: %v", filename, err)
+		return fmt.Errorf("error writing %s: %v", filepath, err)
 	}
 	return nil
 }
@@ -111,7 +111,7 @@ type CompiledCircuitBytes struct {
 }
 
 // SerializeCompiledCircuit serializes a compiled circuit to file
-func SerializeCompiledCircuit(cc *ap.CompiledCircuit, filename string) error {
+func SerializeCompiledCircuit(cc *ap.CompiledCircuit, filepath string) error {
 	var ccsB, pkb, vkb bytes.Buffer
 	cc.Ccs.WriteTo(&ccsB)
 	cc.Pk.WriteTo(&pkb)
@@ -129,7 +129,7 @@ func SerializeCompiledCircuit(cc *ap.CompiledCircuit, filename string) error {
 		return fmt.Errorf("error encoding compiled circuit: %v", err)
 	}
 
-	err := os.WriteFile(filename, buf.Bytes(), 0644)
+	err := os.WriteFile(filepath, buf.Bytes(), 0644)
 	if err != nil {
 		return fmt.Errorf("error writing compiled circuit to file: %v", err)
 	}
@@ -138,8 +138,8 @@ func SerializeCompiledCircuit(cc *ap.CompiledCircuit, filename string) error {
 }
 
 // DeserializeCompiledCircuit deserializes a compiled circuit from file
-func DeserializeCompiledCircuit(filename string) (*ap.CompiledCircuit, error) {
-	data, err := os.ReadFile(filename)
+func DeserializeCompiledCircuit(filepath string) (*ap.CompiledCircuit, error) {
+	data, err := os.ReadFile(filepath)
 	if err != nil {
 		return nil, fmt.Errorf("error reading compiled circuit file: %v", err)
 	}
