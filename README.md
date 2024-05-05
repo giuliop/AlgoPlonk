@@ -60,6 +60,8 @@ import (
 	ap "github.com/giuliop/algoplonk"
 	"github.com/giuliop/algoplonk/setup"
 	"github.com/giuliop/algoplonk/testutils"
+	sdk "github.com/giuliop/algoplonk/testutils/algosdkwrapper"
+	"github.com/giuliop/algoplonk/verifier"
 )
 ```
 ...we define a simple zk circuit with [gnark](https://github.com/Consensys/gnark) that given public variables `a` and `b`, verifies that the Prover knows a secret `c` that satisfies the Pythagorean equation:  a^2 + b^2 == c^2
@@ -90,7 +92,7 @@ func main() {
 	assignment.B = 4
 	assignment.C = 5
 ```
-A bit of housekeeping now, specify where to put the automatically generated files and how to call them.
+A bit of housekeeping now, we specify where to put the automatically generated files and how to call them.
 
 AlgoPlonk will generate these files later on:
 * generated/BasicVerifier.py (the smart contract verifier)
@@ -119,7 +121,9 @@ Then we write to file the python code for the smart contract verifier with `Writ
 
 	compiledCircuit, err := ap.Compile(&circuit, curve, setup.Trusted)
 	err = compiledCircuit.WritePuyaPyVerifier(puyaVerifierFilename)
-	err = testutils.CompileWithPuyapy(verifierName, artefactsFolder)
+	err = testutils.CompileWithPuyaPy(puyaVerifierFilename, "")
+	err = testutils.RenamePuyaPyOutput(verifier.VerifierContractName,
+		verifierName, artefactsFolder)
 ```
 Cool, let's now deploy the verifier contract on a local blockchain (use `algokit localnet start` to activate it).
 ```
@@ -128,16 +132,16 @@ Cool, let's now deploy the verifier contract on a local blockchain (use `algokit
 Yes! We are ready to rock n' roll now, let's create a proof and export it to file together with its public inputs so we can verify it.
 ```
 	verifiedProof, err := compiledCircuit.Verify(&assignment)
-	err = verifiedProof.WriteProofAndPublicInputs(proofFilename,
-	    publicInputsFilename)
+	err = verifiedProof.ExportProofAndPublicInputs(proofFilename,
+		publicInputsFilename)
 ```
 We simulate a call to the `verify` method of the verifier contract passing the generated proof and public inputs as parameters.
 ```
 	simulate := true
 	schema, err := testutils.ReadArc32Schema(filepath.Join(artefactsFolder,
 	    verifierName+".arc32.json"))
-	result, err := testutils.CallVerifyMethod(app_id, nil, proofFilename,
-	    publicInputsFilename, schema, simulate)
+	result, err := sdk.CallVerifyMethod(app_id, nil, proofFilename,
+		publicInputsFilename, schema, simulate)
 
 	fmt.Printf("Verifier app returned: %v\n", result.ReturnValue)
 }
