@@ -4,7 +4,9 @@
 
 > **Disclaimer:** AlgoPlonk is a new project and  should be used with caution in production environments. Feedback and contributions are welcome as we work to advance the state of zero knowledge proofs on the Algorand blockchain.
 
-> **Important:** The latest release of [gnark](https://github.com/Consensys/gnark) (v.0.10.0) introduced breaking changes. Import v.0.9.1 in your project using AlgoPlonk until we reflect the changes and test them thoroughly. To ensure that add `github.com/consensys/gnark v0.9.1` in the `require` section of your `go.mod` file.
+> **Important:** The latest release of [gnark](https://github.com/Consensys/gnark) (v.0.10.0) introduced breaking changes. Import v.0.9.1 in your project using AlgoPlonk until we reflect the changes and test them thoroughly.
+<br>To ensure that, add `github.com/consensys/gnark v0.9.1` in the `require` section of your `go.mod` file.
+<br>If you are also using [gnark-crypto](https://github.com/Consensys/gnark-crypto), to maintain compatibility with `gnark` similarly pin `github.com/consensys/gnark-crypto v0.12.2-0.20231013160410-1f65e75b6dfb` in your `go.mod` file.
 
 AlgoPlonk automatically generates a smart contract verifier from a zk circuit definition. It integrates with the [gnark](https://github.com/Consensys/gnark) toolchain, so you can use [gnark](https://github.com/Consensys/gnark) to define a plonk based zk circuit and to generate proofs for it, and use AlgoPlonk to generate an Algorand smart contract verifier that can verify those proofs.
 
