@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.1.5
+*Date: 2024-05-13*
+
+### Changed
+- **Updates to match changes in gnark v0.10.0**
+  - Changed verifiers to reflect gnark updating to new version of Plonk paper
+  - Changed internal functions to match new gnark-crypto API
+
+
 ## v0.1.4
 *Date: 2024-05-05*
 

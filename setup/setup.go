@@ -5,7 +5,6 @@ import (
 	"embed"
 	"encoding/binary"
 	"fmt"
-	"math/big"
 
 	"github.com/consensys/gnark-crypto/ecc"
 	bls12381 "github.com/consensys/gnark-crypto/ecc/bls12-381"
@@ -15,6 +14,7 @@ import (
 	"github.com/consensys/gnark-crypto/kzg"
 	"github.com/consensys/gnark/backend/plonk"
 	"github.com/consensys/gnark/constraint"
+	"github.com/consensys/gnark/test/unsafekzg"
 )
 
 // Conf specified what setup to run, either trusted as per doc.go or a test only
@@ -31,34 +31,55 @@ const (
 func Run(ccs constraint.ConstraintSystem, curve ecc.ID, setup Conf) (
 	plonk.ProvingKey, plonk.VerifyingKey, error) {
 
+	if setup == TestOnly {
+		srs, lagrangeSrs, err := unsafekzg.NewSRS(ccs)
+		if err != nil {
+			return nil, nil, fmt.Errorf("error creating test SRS:  %v", err)
+		}
+		return plonk.Setup(ccs, srs, lagrangeSrs)
+	}
+
+	// setup == Trusted
+	var srs, lagrangeSrs kzg.SRS
+
 	numGates := uint64(ccs.GetNbConstraints() + ccs.GetNbPublicVariables())
 	numGates = ecc.NextPowerOfTwo(numGates) + 3
 
-	var srs kzg.SRS
-	var err error
-
 	switch curve {
 	case ecc.BLS12_381:
-		if setup == Trusted {
-			srs, err = trustedSetupBLS12381(numGates)
-		} else if setup == TestOnly {
-			srs, err = kzg_bls12381.NewSRS(numGates, big.NewInt(-1))
+		_srs, err := trustedSetupBLS12381(numGates)
+		if err != nil {
+			return nil, nil, fmt.Errorf("error creating SRS:  %v", err)
 		}
+		srs = _srs
+		_lagrangeSrs := &kzg_bls12381.SRS{Vk: _srs.Vk}
+		lagrangeG1, err := kzg_bls12381.ToLagrangeG1(
+			_srs.Pk.G1[:len(_srs.Pk.G1)-3])
+		if err != nil {
+			return nil, nil, fmt.Errorf("error creating lagrange G1:  %v", err)
+		}
+		_lagrangeSrs.Pk.G1 = lagrangeG1
+		lagrangeSrs = _lagrangeSrs
+
 	case ecc.BN254:
-		if setup == Trusted {
-			srs, err = trustedSetupBN254(numGates)
-		} else if setup == TestOnly {
-			srs, err = kzg_bn254.NewSRS(numGates, big.NewInt(-1))
+		_srs, err := trustedSetupBN254(numGates)
+		if err != nil {
+			return nil, nil, fmt.Errorf("error creating SRS:  %v", err)
 		}
+		srs = _srs
+		_lagrangeSrs := &kzg_bn254.SRS{Vk: _srs.Vk}
+		lagrangeG1, err := kzg_bn254.ToLagrangeG1(_srs.Pk.G1[:len(_srs.Pk.G1)-3])
+		if err != nil {
+			return nil, nil, fmt.Errorf("error creating lagrange G1:  %v", err)
+		}
+		_lagrangeSrs.Pk.G1 = lagrangeG1
+		lagrangeSrs = _lagrangeSrs
+
 	default:
 		return nil, nil, fmt.Errorf("unsupported curve: %v", curve)
 	}
 
-	if err != nil {
-		return nil, nil, fmt.Errorf("error creating SRS:  %v", err)
-	}
-
-	return plonk.Setup(ccs, srs)
+	return plonk.Setup(ccs, srs, lagrangeSrs)
 }
 
 //go:embed bls12_381/pk.bin bls12_381/vk.bin bn254/pk.bin bn254/vk.bin

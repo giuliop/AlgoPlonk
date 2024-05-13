@@ -5,6 +5,7 @@ import (
 	"hash"
 	"math/big"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/algorand/go-algorand-sdk/v2/types"
@@ -144,13 +145,18 @@ func TestCircuitBothCurves(t *testing.T) {
 			t.Fatalf("error calling verifier app: %v", err)
 		}
 
-		rawValue := result.RawReturnValue
-		if len(rawValue) == 0 {
-			t.Fatalf("verifier app returned empty value")
+		//printDebugLogs(result.TransactionInfo.Logs)
+
+		if result.DecodeError != nil {
+			t.Fatalf("error decoding result: %v", result.DecodeError)
 		}
-		if rawValue[0] != 0x80 {
-			t.Fatalf("Verifier app did not return true, but: %v\n",
-				result.ReturnValue)
+		switch result.ReturnValue {
+		case true:
+			return
+		case false:
+			t.Fatal("verifier app returned false")
+		default:
+			t.Fatal("verifier app failed")
 		}
 	}
 }
@@ -246,4 +252,20 @@ func buildZeroHashes(levels int, hash HashFunc) [][]byte {
 		zeroHashes[i] = hash(zeroHashes[i-1], zeroHashes[i-1])
 	}
 	return zeroHashes
+}
+
+// printDebugLogs prints debuglogs from a transaction as byte slices.
+// If the logs are in the format of ... -> .., it will print the left part as
+// a string and the right part as a byte slice.
+func printDebugLogs(logs [][]byte) {
+	for _, bytes := range logs {
+		str := string(bytes)
+		parts := strings.Split(str, " -> ")
+		if len(parts) > 1 {
+			leftPart := strings.TrimSpace(parts[0])
+			fmt.Printf("%s -> ", leftPart)
+			bytes = []byte(parts[1])
+		}
+		fmt.Printf("%v\n", bytes)
+	}
 }

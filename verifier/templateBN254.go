@@ -6,8 +6,8 @@ import typing
 
 import algopy as py
 from algopy import subroutine, BigUInt, Bytes, arc4, UInt64, urange
-from algopy.arc4 import UInt256, abimethod, Tuple, DynamicArray, StaticArray, String
-from algopy.op import sha256, EllipticCurve as ec, EC
+from algopy.arc4 import UInt256, abimethod, DynamicArray, StaticArray, String
+from algopy.op import bzero, sha256, EllipticCurve as ec, EC
 
 Bytes32: typing.TypeAlias = StaticArray[arc4.Byte, typing.Literal[32]]
 
@@ -62,7 +62,7 @@ class {{ (contractName) }}(py.ARC4Contract):
 		q = BigUInt(R_MOD)
 
 		# check proof and public inputs lengths
-		assert proof.length == 26
+		assert proof.length == 24
 		assert public_inputs.length == {{ .NbPublicVariables }}
 
 		# Read verifying key
@@ -102,12 +102,10 @@ class {{ (contractName) }}(py.ARC4Contract):
 		S2_AT_Z = proof[16].copy() 						  # s2(zeta)
 		GRAND_PRODUCT = proof[17].bytes + proof[18].bytes # z(x)
 		GRAND_PRODUCT_AT_Z_OMEGA = proof[19].copy()       # z(w*zeta)
-		QUOTIENT_POLY_AT_Z = proof[20].copy()             # t(zeta)
-		LINEAR_POLY_AT_Z = proof[21].copy()               # r(zeta)
 
-		# Folded proof for opening of H, linear poly, l, r, o, s1, s2, qc
-		BATCH_OPENING_AT_Z = proof[22].bytes + proof[23].bytes
-		OPENING_AT_Z_OMEGA = proof[24].bytes + proof[25].bytes
+		# Folded proof for opening of linear poly, l, r, o, s1, s2
+		BATCH_OPENING_AT_Z = proof[20].bytes + proof[21].bytes
+		OPENING_AT_Z_OMEGA = proof[22].bytes + proof[23].bytes
 
 		### check proof public inputs are well-formed ###
 		if (BigUInt.from_bytes(L_AT_Z.bytes) >= q
@@ -116,8 +114,7 @@ class {{ (contractName) }}(py.ARC4Contract):
 				or BigUInt.from_bytes(S1_AT_Z.bytes) >= q
 				or BigUInt.from_bytes(S2_AT_Z.bytes) >= q
 				or BigUInt.from_bytes(GRAND_PRODUCT_AT_Z_OMEGA.bytes) >= q
-				or BigUInt.from_bytes(QUOTIENT_POLY_AT_Z.bytes) >= q
-				or BigUInt.from_bytes(LINEAR_POLY_AT_Z.bytes) >= q):
+		):
 			{{/*}}py.log("error: invalid proof"){{*/ -}}
 			return arc4.Bool(False)
 
@@ -135,8 +132,8 @@ class {{ (contractName) }}(py.ARC4Contract):
 		for i in urange(public_inputs.length):
 			public_inputs_bytes += public_inputs[i].bytes
 
-		gamma_pre = sha256(b'gamma' + VK_S1 + VK_S2 + VK_S3 + VK_QL + VK_QR + VK_QM + VK_QO + VK_QK
-						   + public_inputs_bytes + L_COM + R_COM + O_COM)
+		gamma_pre = sha256(b'gamma' + VK_S1 + VK_S2 + VK_S3 + VK_QL + VK_QR
+			+ VK_QM + VK_QO + VK_QK + public_inputs_bytes + L_COM + R_COM + O_COM)
 		beta_pre = sha256(b'beta' + gamma_pre)
 		alpha_pre = sha256(b'alpha' + beta_pre + GRAND_PRODUCT)
 		zeta_pre = sha256(b'zeta' + alpha_pre + H_0 + H_1 + H_2)
@@ -200,7 +197,7 @@ class {{ (contractName) }}(py.ARC4Contract):
 		res = (res * alpha) % q
 		alpha2Lagrange = res
 
-		# verify quotient polynomial evaluation at zeta
+		# verify opening linearization polynomial
 		s1 = (BigUInt.from_bytes(S1_AT_Z.bytes) * beta) % q
 		s1 = (s1 + gamma + BigUInt.from_bytes(L_AT_Z.bytes)) % q
 
@@ -214,14 +211,8 @@ class {{ (contractName) }}(py.ARC4Contract):
 		s1 = (s1 * alpha) % q
 		s1 = (s1 * BigUInt.from_bytes(GRAND_PRODUCT_AT_Z_OMEGA.bytes)) % q
 
-		quot = (BigUInt.from_bytes(LINEAR_POLY_AT_Z.bytes) + PI + s1 + q
-								   - alpha2Lagrange) % q
-
-		s2 = (BigUInt.from_bytes(QUOTIENT_POLY_AT_Z.bytes) * Zz) % q
-
-		if quot != s2:
-			{{/*}}py.log("error: quotient polynomial evaluation verification failed"){{*/ -}}
-			return arc4.Bool(False)
+		s1 = (s1 + PI + q - alpha2Lagrange)  % q
+		linearized_poly_at_z = (q - s1)
 
 		# compute the folded commitment to H
 		n2 = VK_DOMAIN_SIZE + BigUInt(2)
@@ -230,6 +221,9 @@ class {{ (contractName) }}(py.ARC4Contract):
 		folded_h = ec.add(EC.BN254g1, folded_h, H_1)
 		folded_h = ec.scalar_mul(EC.BN254g1, folded_h, zn2.bytes)
 		folded_h = ec.add(EC.BN254g1, folded_h, H_0)
+		znminus1 = (expmod(zeta, VK_DOMAIN_SIZE, q) + q - BigUInt(1)) % q
+		folded_h = ec.scalar_mul(EC.BN254g1, folded_h, znminus1.bytes)
+		folded_h = invert(folded_h)
 
 		# compute commitment to linearization polynomial
 		u = (BigUInt.from_bytes(GRAND_PRODUCT_AT_Z_OMEGA.bytes) * beta) % q
@@ -275,24 +269,21 @@ class {{ (contractName) }}(py.ARC4Contract):
 		add_term = ec.scalar_mul(EC.BN254g1, GRAND_PRODUCT, s2.bytes)
 		lin_poly_com = ec.add(EC.BN254g1, lin_poly_com, add_term)
 
+		lin_poly_com = ec.add(EC.BN254g1, lin_poly_com, folded_h)
+
 		# generate challenge to fold the opening proofs
-		r_pre = sha256(b'gamma' + UInt256(zeta).bytes + folded_h + lin_poly_com
-			 + L_COM + R_COM + O_COM + VK_S1 + VK_S2 + QUOTIENT_POLY_AT_Z.bytes
-			 + LINEAR_POLY_AT_Z.bytes + L_AT_Z.bytes + R_AT_Z.bytes
-			 + O_AT_Z.bytes + S1_AT_Z.bytes + S2_AT_Z.bytes
-			 + GRAND_PRODUCT_AT_Z_OMEGA.bytes)
+		linearized_poly_at_z_bytes = bzero(32) | linearized_poly_at_z.bytes
+		r_pre = sha256(b'gamma' + UInt256(zeta).bytes + lin_poly_com
+			 + L_COM + R_COM + O_COM + VK_S1 + VK_S2 + linearized_poly_at_z_bytes
+			 + L_AT_Z.bytes + R_AT_Z.bytes + O_AT_Z.bytes + S1_AT_Z.bytes
+			 + S2_AT_Z.bytes + GRAND_PRODUCT_AT_Z_OMEGA.bytes)
 		r = curvemod(r_pre)
 		r_acc = r
 
 		# fold the proof in one point
-		digest = folded_h
-		add_term = ec.scalar_mul(EC.BN254g1, lin_poly_com, r_acc.bytes)
-		digest = ec.add(EC.BN254g1, digest, add_term)
-		claims = (BigUInt.from_bytes(QUOTIENT_POLY_AT_Z.bytes)
-				  + (BigUInt.from_bytes(LINEAR_POLY_AT_Z.bytes) * r_acc)
-				 ) % q
+		digest = lin_poly_com
+		claims = linearized_poly_at_z
 
-		r_acc = (r_acc * r) % q
 		add_term = ec.scalar_mul(EC.BN254g1, L_COM, r_acc.bytes)
 		digest = ec.add(EC.BN254g1, digest, add_term)
 		claims = (claims + (BigUInt.from_bytes(L_AT_Z.bytes) * r_acc)) % q
@@ -350,19 +341,19 @@ class {{ (contractName) }}(py.ARC4Contract):
 		   + UInt256(G2_SRS_1_X_1).bytes + UInt256(G2_SRS_1_X_0).bytes
 		   + UInt256(G2_SRS_1_Y_1).bytes + UInt256(G2_SRS_1_Y_0).bytes)
 
-		{{/* -}}
+		{{/*}}
 		py.log(b"gamma -> " + gamma.bytes)
 		py.log(b"beta -> " + beta.bytes)
 		py.log(b"alpha -> " + alpha.bytes)
 		py.log(b"zeta -> " + zeta.bytes)
 		py.log(b"PI -> " + PI.bytes)
 		py.log(b"alpha2Lagrange -> " + alpha2Lagrange.bytes)
-		py.log(b"folded_h -> " + folded_h)
+		py.log(b"linearized_poly_at_z -> " + linearized_poly_at_z_bytes)
 		py.log(b"lin_poly_com -> " + lin_poly_com)
-		py.log(b"gamma -> " + gamma.bytes)
+		py.log(b"r -> " + r.bytes)
 		py.log(b'digest -> ' + digest)
 		py.log(b'claims -> ' + claims.bytes)
-		{{ */ -}}
+		{{*/}}
 
 		check = ec.pairing_check(EC.BN254g1, digest + quotient, g2)
 		return arc4.Bool(check)

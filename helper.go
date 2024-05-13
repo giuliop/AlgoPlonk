@@ -50,7 +50,7 @@ func marshalPlonkBls12381Proof(proof *plonk_bls12381.Proof) []byte {
 	// [32]byte o_at_zeta;
 	// [32]byte s1_at_zeta;
 	// [32]byte s2_at_zeta;
-	for i := 2; i < 7; i++ {
+	for i := 1; i < 6; i++ {
 		tmp32 = proof.BatchedProof.ClaimedValues[i].Bytes()
 		res = append(res, tmp32[:]...)
 	}
@@ -61,13 +61,6 @@ func marshalPlonkBls12381Proof(proof *plonk_bls12381.Proof) []byte {
 
 	// [32]byte grand_product_at_zeta_omega;
 	tmp32 = proof.ZShiftedOpening.ClaimedValue.Bytes()
-	res = append(res, tmp32[:]...)
-
-	// [32]byte quotient_polynomial_at_zeta;
-	// [32]byte linearization_polynomial_at_zeta;
-	tmp32 = proof.BatchedProof.ClaimedValues[0].Bytes()
-	res = append(res, tmp32[:]...)
-	tmp32 = proof.BatchedProof.ClaimedValues[1].Bytes()
 	res = append(res, tmp32[:]...)
 
 	// [3][32]byte opening_at_zeta_proof
@@ -82,7 +75,7 @@ func marshalPlonkBls12381Proof(proof *plonk_bls12381.Proof) []byte {
 	// [][96]byte wire_committed_commitments;
 	if len(proof.Bsb22Commitments) > 0 {
 		for i := 0; i < len(proof.Bsb22Commitments); i++ {
-			tmp32 = proof.BatchedProof.ClaimedValues[7+i].Bytes()
+			tmp32 = proof.BatchedProof.ClaimedValues[6+i].Bytes()
 			res = append(res, tmp32[:]...)
 		}
 		for _, bc := range proof.Bsb22Commitments {
