@@ -51,15 +51,16 @@ func Compile(circuit frontend.Circuit, curve ecc.ID, setupConf setup.Conf) (
 }
 
 // WritePuyaPyVerifier writes to file python code that the PuyaPy compiler can
-// compile to a smart contract verifier for the circuit.
-func (cc *CompiledCircuit) WritePuyaPyVerifier(filepath string) error {
+// compile to a logicsig or smart contract verifier for the circuit.
+func (cc *CompiledCircuit) WritePuyaPyVerifier(filepath string,
+	outputType verifier.ContractType) error {
 	file, err := os.Create(filepath)
 	if err != nil {
 		return fmt.Errorf("error creating file: %v", err)
 	}
 	defer file.Close()
 
-	err = verifier.WritePuyaPy(cc.Vk, file)
+	err = verifier.WritePythonCode(cc.Vk, outputType, file)
 	if err != nil {
 		err = fmt.Errorf("error writing PuyaPy contract: %v", err)
 	}
@@ -90,29 +91,35 @@ func (cc *CompiledCircuit) Verify(assignment frontend.Circuit,
 }
 
 // ExportProofAndPublicInputs writes a proof and its public inputs to files
-// as binary blobs for the AVM verifier
+// as binary blobs for the AVM verifier. If a file path is empty, the
+// corresponding data is not written.
 func (vp *VerifiedProof) ExportProofAndPublicInputs(proofFilePath string,
 	publicInputsFilePath string) error {
 
-	proofFile, err := os.Create(proofFilePath)
-	if err != nil {
-		return fmt.Errorf("error creating proof file: %v", err)
-	}
-	defer proofFile.Close()
+	if proofFilePath != "" {
+		proofFile, err := os.Create(proofFilePath)
+		if err != nil {
+			return fmt.Errorf("error creating proof file: %v", err)
+		}
+		defer proofFile.Close()
 
-	publicInputsFile, err := os.Create(publicInputsFilePath)
-	if err != nil {
-		return fmt.Errorf("error creating public inputs file: %v", err)
+		err = vp.WriteProof(proofFile)
+		if err != nil {
+			return err
+		}
 	}
-	defer publicInputsFile.Close()
 
-	err = vp.WriteProof(proofFile)
-	if err != nil {
-		return err
-	}
-	err = vp.WritePublicInputs(publicInputsFile)
-	if err != nil {
-		return err
+	if publicInputsFilePath != "" {
+		publicInputsFile, err := os.Create(publicInputsFilePath)
+		if err != nil {
+			return fmt.Errorf("error creating public inputs file: %v", err)
+		}
+		defer publicInputsFile.Close()
+
+		err = vp.WritePublicInputs(publicInputsFile)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }

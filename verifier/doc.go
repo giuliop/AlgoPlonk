@@ -1,9 +1,14 @@
 /*
-package verifier provides functions to generate verifier smart contracts for
-plonk based circuits.
+package verifier provides functions to generate either a verifier logicsig or
+verifier smart contract from a compiled circuit.
 
-The generated smart contract verifiers are ARC4 contracts with the following
-ABI methods:
+If logicsig generation is chosen, the generated logicsig will look for its arguments
+(proof and public inputs) in the first two elements of the transaction's application
+arguments. This the verifier logicsig has to be used to sign an application call
+transaction.
+
+If smart contract generation is chosen, the generated contract will be an ARC4
+contract with the following ABI methods:
 
 `create` is used to create the application and will set two global properties,
 - `app_name` with the provided name

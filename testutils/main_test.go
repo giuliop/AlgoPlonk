@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"hash"
 	"math/big"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -54,8 +55,10 @@ func (circuit *MerkleCircuit) Define(api frontend.API) error {
 	return nil
 }
 
-func TestCircuitBothCurves(t *testing.T) {
-	for _, curve := range []ecc.ID{ecc.BLS12_381, ecc.BN254} {
+// TestLogicsigVerifier tests the verifier logicsig
+// for both BLS12_381 and BN254 curves
+func TestLogicsigVerifier(t *testing.T) {
+	for _, curve := range []ecc.ID{ecc.BN254, ecc.BLS12_381} {
 		hash := mimcHasher(curve)
 		zeroHashes := buildZeroHashes(MerkleTreeLevels, hash)
 		leaves := make([][]byte, 6)
@@ -90,7 +93,158 @@ func TestCircuitBothCurves(t *testing.T) {
 		assignment.Path = pathForProof
 		assignment.Index = indexForProof
 
-		verifierName := "TestVerifierForCurve" + curve.String()
+		verifierName := "VerifierLogicSigForCurve" + curve.String()
+
+		puyaVerifierFilename := filepath.Join(artefactsFolder, verifierName+".py")
+		proofFilename := filepath.Join(artefactsFolder, verifierName+".proof")
+		publicInputsFilename := filepath.Join(artefactsFolder,
+			verifierName+".public_inputs")
+
+		compiledCircuit, err := ap.Compile(&circuit, curve, setup.Trusted)
+		if err != nil {
+			t.Fatalf("\nerror compiling circuit: %v", err)
+		}
+
+		verifiedProof, err := compiledCircuit.Verify(&assignment)
+		if err != nil {
+			t.Fatalf("\nerror during verification: %v", err)
+		}
+		err = compiledCircuit.WritePuyaPyVerifier(puyaVerifierFilename,
+			verifier.LogicSig)
+		if err != nil {
+			t.Fatalf("error writing PuyaPy verifier: %v", err)
+		}
+
+		err = verifiedProof.ExportProofAndPublicInputs(proofFilename,
+			publicInputsFilename)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		err = CompileWithPuyaPy(puyaVerifierFilename, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		err = RenamePuyaPyOutput(verifier.DefaultFileName, verifierName,
+			artefactsFolder)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		verifierTealFile := filepath.Join(artefactsFolder, verifierName+".teal")
+		verifierLogicSig, err := sdk.LogicSigFromFile(verifierTealFile)
+		if err != nil {
+			t.Fatalf("error reading verifier logicsig: %v", err)
+		}
+
+		proof, err := os.ReadFile(proofFilename)
+		if err != nil {
+			t.Fatalf("failed to read proof file: %v", err)
+		}
+		publicInputs, err := os.ReadFile(publicInputsFilename)
+		if err != nil {
+			t.Fatalf("failed to read public inputs file: %v", err)
+		}
+
+		simulate := true
+
+		testAppId, testAppSchema, err := DeployAppWithVerifyMethod(artefactsFolder)
+		if err != nil {
+			t.Fatalf("error deploying test verifier app to local network: %v", err)
+		}
+
+		err = CallLogicSigVerifier(testAppId, testAppSchema, verifierLogicSig, proof,
+			publicInputs, simulate)
+		if err != nil {
+			t.Fatalf("error calling logicsig verifier: %v", err)
+		}
+
+		// now let's change the public inputs and see it fail
+		publicInputs0 := publicInputs[0]
+		if publicInputs[0] == 0 {
+			publicInputs[0] = 1
+		} else {
+			publicInputs[0] = 0
+		}
+		err = CallLogicSigVerifier(testAppId, testAppSchema, verifierLogicSig, proof,
+			publicInputs, simulate)
+		if err == nil {
+			t.Fatalf("Logicsig successful but was expected to fail")
+		}
+		if err != nil && !strings.Contains(err.Error(), "rejected by logic") {
+			t.Fatalf("Unexpected error: %v", err)
+		}
+
+		// now let's change the proof and see it fail; we change the first g1 point of
+		// proof by copying the second g1 point over it
+		publicInputs[0] = publicInputs0 // restore the original value
+		var g1PointBytes int
+		switch curve {
+		case ecc.BLS12_381:
+			g1PointBytes = 96
+		case ecc.BN254:
+			g1PointBytes = 64
+		default:
+			t.Fatalf("unsupported curve")
+		}
+
+		for i := 0; i < g1PointBytes; i += 1 {
+			proof[i] = proof[i+g1PointBytes]
+		}
+
+		err = CallLogicSigVerifier(testAppId, testAppSchema, verifierLogicSig, proof,
+			publicInputs, simulate)
+		if err == nil {
+			t.Fatalf("Logicsig successful but was expected to fail")
+		}
+		if err != nil && !strings.Contains(err.Error(), "rejected by logic") {
+			t.Fatalf("Unexpected error: %v", err)
+		}
+	}
+}
+
+// TestSmartContractVerifier tests the verifier smart contract
+// for both BLS12_381 and BN254 curves
+func TestSmartContractVerifier(t *testing.T) {
+	for _, curve := range []ecc.ID{ecc.BN254, ecc.BLS12_381} {
+		hash := mimcHasher(curve)
+		zeroHashes := buildZeroHashes(MerkleTreeLevels, hash)
+		leaves := make([][]byte, 6)
+		for i := range leaves {
+			leaves[i] = []byte("leaf" + fmt.Sprint(i))
+		}
+
+		indexForProof := 3 // the fourth inserted leaf
+		leafForProof := leaves[indexForProof]
+
+		path := make([][]byte, MerkleTreeLevels+1)
+		path[0] = leafForProof
+		path[1] = hash(leaves[2])
+		path[2] = hash(hash(leaves[0]), hash(leaves[1]))
+		path[3] = hash(hash(hash(leaves[4]), hash(leaves[5])), zeroHashes[1])
+		for i := 4; i < MerkleTreeLevels+1; i++ {
+			path[i] = zeroHashes[i-1]
+		}
+
+		rootForProof := hash(path[2], hash(path[1], hash(path[0])))
+		for i := 3; i <= MerkleTreeLevels; i++ {
+			rootForProof = hash(rootForProof, path[i])
+		}
+
+		var circuit MerkleCircuit
+		var assignment MerkleCircuit
+		var pathForProof [MerkleTreeLevels + 1]frontend.Variable
+		for i := range path {
+			pathForProof[i] = path[i]
+		}
+		assignment.RootHash = rootForProof
+		assignment.Path = pathForProof
+		assignment.Index = indexForProof
+
+		verifierType := verifier.SmartContract
+		verifierName := "VerifierSmartContractForCurve" + curve.String()
+
 		puyaVerifierFilename := filepath.Join(artefactsFolder, verifierName+".py")
 		proofFilename := filepath.Join(artefactsFolder, verifierName+".proof")
 		publicInputsFilename := filepath.Join(artefactsFolder,
@@ -106,13 +260,12 @@ func TestCircuitBothCurves(t *testing.T) {
 			t.Fatalf("\nerror during verification: %v", err)
 		}
 
-		err = compiledCircuit.WritePuyaPyVerifier(puyaVerifierFilename)
+		err = compiledCircuit.WritePuyaPyVerifier(puyaVerifierFilename, verifierType)
 		if err != nil {
 			t.Fatalf("error writing PuyaPy verifier: %v", err)
 		}
 
-		err = verifiedProof.ExportProofAndPublicInputs(proofFilename,
-			publicInputsFilename)
+		err = verifiedProof.ExportProofAndPublicInputs(proofFilename, publicInputsFilename)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -121,10 +274,24 @@ func TestCircuitBothCurves(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		err = RenamePuyaPyOutput(verifier.VerifierContractName,
+		err = RenamePuyaPyOutput(verifier.DefaultFileName,
 			verifierName, artefactsFolder)
 		if err != nil {
 			t.Fatal(err)
+		}
+
+		proof, err := os.ReadFile(proofFilename)
+		if err != nil {
+			t.Fatalf("failed to read proof file: %v", err)
+		}
+		publicInputs, err := os.ReadFile(publicInputsFilename)
+		if err != nil {
+			t.Fatalf("failed to read public inputs file: %v", err)
+		}
+
+		args, err := AbiEncodeProofAndPublicInputs(proof, publicInputs)
+		if err != nil {
+			t.Fatalf("error abi encoding proof and public inputs: %v", err)
 		}
 
 		app_id, err := sdk.DeployArc4AppIfNeeded(verifierName, artefactsFolder)
@@ -139,24 +306,82 @@ func TestCircuitBothCurves(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to read application schema: %s", err)
 		}
-		result, err := sdk.CallVerifyMethod(app_id, nil, proofFilename,
-			publicInputsFilename, schema, simulate)
+		result, err := sdk.ExecuteAbiCall(app_id, schema, "verify", types.NoOpOC,
+			args, nil, nil, simulate)
 		if err != nil {
 			t.Fatalf("error calling verifier app: %v", err)
 		}
-
-		//printDebugLogs(result.TransactionInfo.Logs)
 
 		if result.DecodeError != nil {
 			t.Fatalf("error decoding result: %v", result.DecodeError)
 		}
 		switch result.ReturnValue {
 		case true:
-			return
+			// expected
 		case false:
 			t.Fatal("verifier app returned false")
 		default:
 			t.Fatal("verifier app failed")
+		}
+
+		// now let's change the public inputs and see it fail
+		publicInputs0 := publicInputs[0]
+		if publicInputs[0] == 0 {
+			publicInputs[0] = 1
+		} else {
+			publicInputs[0] = 0
+		}
+		result, err = sdk.ExecuteAbiCall(app_id, schema, "verify", types.NoOpOC,
+			args, nil, nil, simulate)
+		if err != nil {
+			t.Fatalf("error calling verifier app: %v", err)
+		}
+		if result.DecodeError != nil {
+			t.Fatalf("error decoding result: %v", result.DecodeError)
+		}
+		switch result.ReturnValue {
+		case true:
+			t.Fatalf("Verifier method successful but we expected it to fail")
+		case false:
+			// expected
+		default:
+			t.Fatal("verifier app failed")
+		}
+
+		// now let's change the proof and see it fail; we change the first g1 point of
+		// proof by copying the second g1 point over it
+		publicInputs[0] = publicInputs0 // restore the original value
+		var g1PointBytes int
+		switch curve {
+		case ecc.BLS12_381:
+			g1PointBytes = 96
+		case ecc.BN254:
+			g1PointBytes = 64
+		default:
+			t.Fatalf("unsupported curve")
+		}
+
+		for i := 0; i < g1PointBytes; i += 1 {
+			proof[i] = proof[i+g1PointBytes]
+		}
+
+		result, err = sdk.ExecuteAbiCall(app_id, schema, "verify", types.NoOpOC,
+			args, nil, nil, simulate)
+		if err != nil {
+			t.Fatalf("error calling verifier app: %v", err)
+		}
+		if err == nil {
+			if result.DecodeError != nil {
+				t.Fatalf("error decoding result: %v", result.DecodeError)
+			}
+			switch result.ReturnValue {
+			case true:
+				t.Fatalf("Verifier method successful but we expected it to fail")
+			case false:
+				// expected
+			default:
+				t.Fatal("verifier app failed")
+			}
 		}
 	}
 }
@@ -172,7 +397,7 @@ func TestAVMVerifierMutability(t *testing.T) {
 		t.Fatalf("\nerror compiling circuit: %v", err)
 	}
 
-	err = compiledCircuit.WritePuyaPyVerifier(puyaVerifierFilename)
+	err = compiledCircuit.WritePuyaPyVerifier(puyaVerifierFilename, verifier.SmartContract)
 	if err != nil {
 		t.Fatalf("error writing PuyaPy verifier: %v", err)
 	}
@@ -181,7 +406,7 @@ func TestAVMVerifierMutability(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = RenamePuyaPyOutput(verifier.VerifierContractName,
+	err = RenamePuyaPyOutput(verifier.DefaultFileName,
 		verifierName, artefactsFolder)
 	if err != nil {
 		t.Fatal(err)
@@ -198,15 +423,15 @@ func TestAVMVerifierMutability(t *testing.T) {
 		t.Fatalf("failed to read application schema: %s", err)
 	}
 
-	_, err = sdk.ExecuteAbiCall(app_id, nil, schema, "make_immutable",
-		types.NoOpOC, nil, nil)
+	_, err = sdk.ExecuteAbiCall(app_id, schema, "make_immutable",
+		types.NoOpOC, nil, nil, nil, false)
 	if err != nil {
 		t.Fatalf("error making verifier app immutable: %v", err)
 	}
 
 	// let's try to delete the verifier app, it should fail
-	_, err = sdk.ExecuteAbiCall(app_id, nil, schema, "update",
-		types.DeleteApplicationOC, nil, nil)
+	_, err = sdk.ExecuteAbiCall(app_id, schema, "update",
+		types.DeleteApplicationOC, nil, nil, nil, false)
 	if err == nil {
 		t.Fatalf("deleting immutable verifier app should have failed")
 	}
@@ -252,20 +477,4 @@ func buildZeroHashes(levels int, hash HashFunc) [][]byte {
 		zeroHashes[i] = hash(zeroHashes[i-1], zeroHashes[i-1])
 	}
 	return zeroHashes
-}
-
-// printDebugLogs prints debuglogs from a transaction as byte slices.
-// If the logs are in the format of ... -> .., it will print the left part as
-// a string and the right part as a byte slice.
-func printDebugLogs(logs [][]byte) {
-	for _, bytes := range logs {
-		str := string(bytes)
-		parts := strings.Split(str, " -> ")
-		if len(parts) > 1 {
-			leftPart := strings.TrimSpace(parts[0])
-			fmt.Printf("%s -> ", leftPart)
-			bytes = []byte(parts[1])
-		}
-		fmt.Printf("%v\n", bytes)
-	}
 }

@@ -16,8 +16,12 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/algorand/go-algorand-sdk/v2/crypto"
+	"github.com/algorand/go-algorand-sdk/v2/transaction"
+	"github.com/algorand/go-algorand-sdk/v2/types"
 	ap "github.com/giuliop/algoplonk"
 	"github.com/giuliop/algoplonk/setup"
+	sdk "github.com/giuliop/algoplonk/testutils/algosdkwrapper"
 
 	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/backend/plonk"
@@ -47,7 +51,9 @@ func CompileWithPuyaPy(filepath string, options string) error {
 // It looks in `dir` for the files to rename, looking for these files:
 // oldname.approval.teal, oldname.clear.teal, oldname.arc32.json, oldname.teal
 func RenamePuyaPyOutput(oldname string, newname string, dir string) error {
-	suffixes := []string{"approval.teal", "clear.teal", "arc32.json", "teal"}
+	suffixes := []string{"approval.teal", "clear.teal", "arc32.json", "teal",
+		"approval.puya.map", "clear.puya.map", "puya.map"}
+	renamedAtLeastOne := false
 	for _, suffix := range suffixes {
 		oldfile := filepath.Join(dir, oldname+"."+suffix)
 		_, err := os.Stat(oldfile)
@@ -57,11 +63,15 @@ func RenamePuyaPyOutput(oldname string, newname string, dir string) error {
 			if err := os.Rename(oldfile, newfile); err != nil {
 				return fmt.Errorf("failed to rename %s: %v", oldfile, err)
 			}
+			renamedAtLeastOne = true
 		case os.IsNotExist(err):
 			continue
 		default:
 			return fmt.Errorf("error accessing %s: %v", oldfile, err)
 		}
+	}
+	if !renamedAtLeastOne {
+		return fmt.Errorf("no files found to rename")
 	}
 	return nil
 }
@@ -234,4 +244,126 @@ func ShouldRecompile(sourcePath, outputPath string) bool {
 	outputModTime := outputFile.ModTime()
 
 	return sourceModTime.After(outputModTime)
+}
+
+// CallVerifyMethod calls a verifier smart contract with the given proof and
+// public inputs from file. If simulate is true, it simulates the call instead
+// of sending it, adding the maximum extra opcode budget.
+// A local network must be running
+func CallVerifyMethod(appId uint64, proofFilename string, publicInputsFilename string,
+	schema *sdk.Arc32Schema, simulate bool) (
+	*transaction.ABIMethodResult, error) {
+
+	proof, err := os.ReadFile(proofFilename)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read proof file: %v", err)
+	}
+	publicInputs, err := os.ReadFile(publicInputsFilename)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read public inputs file: %v", err)
+	}
+	args, err := AbiEncodeProofAndPublicInputs(proof, publicInputs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode proof and public inputs: %v", err)
+	}
+	return sdk.ExecuteAbiCall(appId, schema, "verify", types.NoOpOC, args, nil, nil, simulate)
+}
+
+// CallLogicSigVerifier makes an app call to appId's "verify" method signed by lsig
+// with proof and public inputs as arguments, bundled in a transaction group
+// to pool size and opcode budget.
+// If simulate is true, it simulates the group instead of sending it.
+// A local network must be running with default parameters
+func CallLogicSigVerifier(appId uint64, schema *sdk.Arc32Schema,
+	lsig *crypto.LogicSigAccount, proof []byte, publicInputs []byte, simulate bool,
+) error {
+	args, err := AbiEncodeProofAndPublicInputs(proof, publicInputs)
+	if err != nil {
+		return fmt.Errorf("failed to encode proof and public inputs: %v", err)
+	}
+	signer := transaction.LogicSigAccountTransactionSigner{LogicSigAccount: *lsig}
+	txnParams, err := sdk.BuildMethodCallParams(appId, schema, "verify", types.NoOpOC, args,
+		nil, signer)
+	if err != nil {
+		return fmt.Errorf("failed to build method call params: %v", err)
+	}
+	txnParams.SuggestedParams.Fee = 0
+	txnParams.SuggestedParams.FlatFee = true
+
+	var atc = transaction.AtomicTransactionComposer{}
+	if err := atc.AddMethodCall(*txnParams); err != nil {
+		return fmt.Errorf("failed to add method call: %v", err)
+	}
+	err = sdk.AddDummyTrasactions(&atc, 9)
+	if err != nil {
+		return fmt.Errorf("failed to add dummy txns: %v", err)
+	}
+	_, err = sdk.ExecuteGroup(&atc, simulate)
+	return err
+}
+
+// DeployAppWithVerifyMethod deploys an app with a "verify" method to test
+// logicsig verifiers.
+// A local network must be running with default parameters
+func DeployAppWithVerifyMethod(workingDir string,
+) (appId uint64, schema *sdk.Arc32Schema, err error) {
+	appName := "Arc4AppWithVerifyMethod"
+	appPythonCode := `
+import typing
+import algopy
+from algopy.arc4 import (
+	abimethod, DynamicArray, StaticArray, Bool, Byte, String
+)
+
+Bytes32: typing.TypeAlias = StaticArray[Byte, typing.Literal[32]]
+
+class Arc4AppWithVerifyMethod(algopy.ARC4Contract):
+
+	@abimethod(create='require')
+	def create(self, name: String) -> None:
+		"""Create the application"""
+		self.app_name = name
+
+	@abimethod
+	def verify(
+		self,
+		proof: DynamicArray[Bytes32],
+		public_inputs: DynamicArray[Bytes32],
+		)-> Bool:
+			return Bool(True)
+`
+	appCodePath := filepath.Join(workingDir, appName+".py")
+	err = os.WriteFile(appCodePath, []byte(appPythonCode), 0644)
+	if err != nil {
+		return 0, nil, fmt.Errorf("error writing app code to file: %v", err)
+	}
+	err = CompileWithPuyaPy(appCodePath, "")
+	if err != nil {
+		return 0, nil, fmt.Errorf("error compiling app code: %v", err)
+	}
+	appId, err = sdk.DeployArc4AppIfNeeded(appName, workingDir)
+	if err != nil {
+		return 0, nil, fmt.Errorf("failed to deploy app: %v", err)
+	}
+	schema, err = sdk.ReadArc32Schema(filepath.Join(workingDir, appName+".arc32.json"))
+	if err != nil {
+		return 0, nil, fmt.Errorf("failed to read arc32 schema: %v", err)
+	}
+	return appId, schema, err
+}
+
+// AbiEncodeProofAndPublicInputs encodes the []byte proof and public inputs into the ABI
+// format expected by the verifiers
+func AbiEncodeProofAndPublicInputs(proof []byte, publicInputs []byte) ([]interface{}, error) {
+	if len(proof)%32 != 0 || len(publicInputs)%32 != 0 {
+		return nil, fmt.Errorf("proof and public inputs must be 32-byte aligned")
+	}
+	var proofAbi, publicInputsAbi [][]byte
+	for i := 0; i < len(proof); i += 32 {
+		proofAbi = append(proofAbi, proof[i:i+32])
+	}
+	for i := 0; i < len(publicInputs); i += 32 {
+		publicInputsAbi = append(publicInputsAbi, publicInputs[i:i+32])
+	}
+	return []interface{}{proofAbi, publicInputsAbi}, nil
 }

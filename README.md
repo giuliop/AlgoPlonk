@@ -8,27 +8,31 @@ AlgoPlonk automatically generates a smart contract verifier from a zk circuit de
 
 The typical workflow is the following:
 1. Define and compile a plonk based zk circuit with [gnark](https://github.com/Consensys/gnark) using the [trusted setup](#trusted-setup) provided by AlgoPlonk
-2. Automatically generate a python Algorand Smart Contract with AlgoPlonk from your compiled circuit
-3. Compile the python code into the teal files to create the contract with [algokit](https://github.com/algorandfoundation/algokit-cli) and the puyapy compiler
+2. Automatically generate a python Algorand Smart Signature or Smart Contract verifier with AlgoPlonk from your compiled circuit
+3. Compile the python code into teal files to create the verifier with [algokit](https://github.com/algorandfoundation/algokit-cli) and the puyapy compiler
 4. Generate proofs and witnesses for your circuit with [gnark](https://github.com/Consensys/gnark)
-5. Export proofs and witnesses with AlgoPlonk and generate the method calls to the smart contract verifier to verify them
+5. Export proofs and witnesses with AlgoPlonk and generate the calls to the verifier to verify them
 
 To ensure compatibility with gnark (and gnark-crypto if you are using it as well), you can pin them to the versions shown in AlgoPlonk's `go.mod` file.
 
-### Supported curves
+### Supported circuits
 
-AlgoPlonk supports the curves for which the AVM offers elliptic curve operations: BN254 and BLS12-381.
-Note that at the moment AlgoPlonk does not support custom gates.
+AlgoPlonk supports the plonk protocol and the curves for which the AVM offers elliptic curve operations: BN254 and BLS12-381.
+Custom gates are not supported.
 
-### Practical considerations
+### Verifiers types
+
+AlgoPlonk can generate both logicsig verifiers and smart contract verifiers.
 
 A BN254 verifier consumes ~145,000 opcode budget, a BLS12-381 verifier ~185,000.
-Since these are smart contracts and currently there is a max pooled limit of ~180,000 opcode budget for smart contracts on the AVM, only the BN254 verifier can be used in practice at the moment.
+Because of these large consumption numbers, logicsig verifiers are recommended:
+1) Each top level transaction in a transaction group offers 20,000 logicsig opcode budget for the cost of 1 minimum transaction fee, so you pay 8 (for BN254) or 10 (for BLS12-381) minimum transaction fees to verify a proof.
 
-Research is ongoing to see if it is possible to make the verifiers as smart signatures, since they enjoy a max pooled limit of 320,000.
-Also, the limits on the AVM might increase in the future, making a BLS12-381 smart contract verifier practical.
+	Smart contracts get 700 opcode budget for each app call transaction in a group (top level or inner), so you have to pay ~208 (for BN254) or ~265 (for BLS12-381) minimum transaction fees to verify a proof with a smart contract verifier.
 
-For now use BN254 verifiers.
+2) The opcode budget for logicsig and smart contracts are separate, so by using logicsig verifiers you preserve the smart contract opcode budget for your application logic.
+
+Note that the maximum opcode budget a transaction group can make available on Algorand at the moment is 320,000 (20,000 * 16) for logicsigs and 190,400 ( (16+256) * 700 ) for smart contracts. You can achieve that by creating a group with 16 top level app calls and 256 inner app call transactions.
 
 ### Trusted Setup
 
@@ -42,9 +46,9 @@ AlgoPlonk also provides test-only setups for circuits of any number of gates. Th
 
 ### How to use AlgoPlonk
 
-The [`examples`](https://github.com/giuliop/AlgoPlonk/tree/main/examples) folder contains some examples of how to use AlgoPlonk that you can run with `go run main.go` in each example subfolder.
+The [`examples`](https://github.com/giuliop/AlgoPlonk/tree/main/examples) folder contains some examples of how to use AlgoPlonk with both logicsig and smart contract verifiers that you can run with `go run main.go` in each example subfolder.
 
-Let's follow here the one in [`examples/basic`](https://github.com/giuliop/AlgoPlonk/tree/main/examples/basic), with some added commentary (but we'll be omitting error checking for brevity, check the full example for that).
+Let's follow here the logicsig example in [`examples/basic`](https://github.com/giuliop/AlgoPlonk/tree/main/examples/basic/logicsigVerifier), with some added commentary (but we'll be omitting error checking for brevity, check the full example for that).
 
 After the mandatory imports...
 ```
@@ -53,6 +57,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
 	"path/filepath"
 
 	"github.com/consensys/gnark-crypto/ecc"
@@ -96,85 +101,89 @@ func main() {
 A bit of housekeeping now, we specify where to put the automatically generated files and how to call them.
 
 AlgoPlonk will generate these files later on:
-* generated/BasicVerifier.py (the smart contract verifier)
+* generated/BasicVerifier.py (the logicsig verifier)
 * generated/BasicVerifier.proof (input for the verifier)
 * generated/BasicVerifier.public_inputs (input for the verifier)
 
-And puyapy will generate these files compiling BasicVerifier.py:
-* generated/BasicVerifier.approval.teal
-* generated/BasicVerifier.clear.teal
-* generated/BasicVerifier.arc32.json
 ```
-	artefactsFolder := "generated"
-	testutils.CreateDirectoryIfNeeded(artefactsFolder)
+artefactsFolder := "generated"
+testutils.CreateDirectoryIfNeeded(artefactsFolder)
 
-	verifierName := "BasicVerifier"
+verifierName := "BasicVerifier"
 
-	puyaVerifierFilename := filepath.Join(artefactsFolder, verifierName+".py")
-	proofFilename := filepath.Join(artefactsFolder, verifierName+".proof")
-	publicInputsFilename := filepath.Join(artefactsFolder,
-	    verifierName+".public_inputs")
+puyaVerifierFilename := filepath.Join(artefactsFolder, verifierName+".py")
+proofFilename := filepath.Join(artefactsFolder, verifierName+".proof")
+publicInputsFilename := filepath.Join(artefactsFolder,
+	verifierName+".public_inputs")
 ```
 Let's choose a curve, we use BLS12-381 here, and compile the circuit.
-Then we write to file the python code for the smart contract verifier with `WritePuyaPyVerifier` and finally we compile it to teal files
+Then we write to file the python code for the verifier with `WritePuyaPyVerifier` and finally we compile it to a teal file.
+Note that we pass `verifier.LogicSig` to `WritePuyaPyVerifier` to specify that we want to generate logicsig verifiers.
 ```
-	curve := ecc.BLS12_381
+curve := ecc.BLS12_381
 
-	compiledCircuit, err := ap.Compile(&circuit, curve, setup.Trusted)
-	err = compiledCircuit.WritePuyaPyVerifier(puyaVerifierFilename)
-	err = testutils.CompileWithPuyaPy(puyaVerifierFilename, "")
-	err = testutils.RenamePuyaPyOutput(verifier.VerifierContractName,
-		verifierName, artefactsFolder)
+compiledCircuit, err := ap.Compile(&circuit, curve, setup.Trusted)
+err = compiledCircuit.WritePuyaPyVerifier(puyaVerifierFilename,
+	verifier.LogicSig)
+err = testutils.CompileWithPuyaPy(puyaVerifierFilename, "")
+err = testutils.RenamePuyaPyOutput(verifier.DefaultFileName, verifierName,
+	artefactsFolder)
 ```
-Cool, let's now deploy the verifier contract on a local blockchain (use `algokit localnet start` to activate it).
+Cool, let's now retrieve the logicsig verifier to use it later.
 ```
-	app_id, err := testutils.DeployArc4AppIfNeeded(verifierName, artefactsFolder)
+verifierTealFile := filepath.Join(artefactsFolder, verifierName+".teal")
+verifierLogicSig, err := sdk.LogicSigFromFile(verifierTealFile)
 ```
-Yes! We are ready to rock n' roll now, let's create a proof and export it to file together with its public inputs so we can verify it.
+We are ready to rock n' roll now, let's create a proof and export it to file together with its public inputs so we can verify it.
 ```
-	verifiedProof, err := compiledCircuit.Verify(&assignment)
-	err = verifiedProof.ExportProofAndPublicInputs(proofFilename,
-		publicInputsFilename)
+verifiedProof, err := compiledCircuit.Verify(&assignment)
+err = verifiedProof.ExportProofAndPublicInputs(proofFilename,
+	publicInputsFilename)
 ```
-We simulate a call to the `verify` method of the verifier contract passing the generated proof and public inputs as parameters.
+To use the logicsig verifier we deploy a dummy smart contract so that we can make an app call signed by the logicsig verifier. If we supply a valid proof it will succeed, otherwise the logicsig will fail.
 ```
-	simulate := true
-	schema, err := testutils.ReadArc32Schema(filepath.Join(artefactsFolder,
-	    verifierName+".arc32.json"))
-	result, err := sdk.CallVerifyMethod(app_id, nil, proofFilename,
-		publicInputsFilename, schema, simulate)
-
-	fmt.Printf("Verifier app returned: %v\n", result.ReturnValue)
+testAppId, testAppSchema, err := testutils.DeployAppWithVerifyMethod(artefactsFolder)
+```
+Let's now read the proof and public inputs from file (we exported them above) and try using the verifier!
+```
+proof, err := os.ReadFile(proofFilename)
+publicInputs, err := os.ReadFile(publicInputsFilename
+simulate := true
+err = testutils.CallLogicSigVerifier(testAppId, testAppSchema,
+	verifierLogicSig, proof, publicInputs, simulate)
 }
 ```
-> Verifier app returned: true
+> Proof verified successfully !
 
 Life is sweet :)
 
-#### The Verifier smart contract
+#### The logicsig verifiers ####
+The generated logicsig verifiers expect to be called signing an app call transaction and to read the proof and public inputs as the second and third application arguments of the app call (since the first app arg is reserved for the method name for arc4 smart contracts).
+
+#### The smart contract verifiers ####
 The generated smart contract verifiers are [ARC4](https://github.com/algorandfoundation/ARCs/blob/main/ARCs/arc-0004.md) contracts with the following ABI methods:
 
-* `create` is used to create the application and will set two global properties:
+`create` is used to create the application and will set two global properties:
 	1.  `app_name` with the provided name
 	2. `immutable` with `False`
 ```
-	@abimethod(create='require')
-	def create(self, name: String) -> None:
+@abimethod(create='require')
+def create(self, name: String) -> None:
 ```
-* `update` allows the creator to update / delete the application unless the `immutable` property has been set to `True`
+`update` allows the creator to update / delete the application unless the `immutable` property has been set to `True`
 ```
-	@abimethod(allow_actions=["UpdateApplication", "DeleteApplication"])
-	def update(self) -> None:
+@abimethod(allow_actions=["UpdateApplication", "DeleteApplication"])
+def update(self) -> None:
 ```
-* `make_immutable` allows the creator to set the `immutable` property to `True`, making the contract fully decentralized with no one able to further modify or delete it.
+`make_immutable` allows the creator to set the `immutable` property to `True`, making the contract fully decentralized with no one able to further modify or delete it.
 ```
-	@abimethod
-	def make_immutable(self) -> None:
+@abimethod
+def make_immutable(self) -> None:
 ```
-* `verify` takes as parameters a proof and public inputs as exported by AlgoPlonk and returns `True` if the proof is verifier, `False` otherwise
+`verify` takes as parameters a proof and public inputs as exported by AlgoPlonk and returns `True` if the proof is verifier, `False` otherwise
 ```
-	@abimethod
-	def verify(self, proof: ..., public_inputs: ...) -> arc4.Bool:
+@abimethod
+def verify(self, proof: ..., public_inputs: ...) -> arc4.Bool:
 ```
 
 ### Next steps
@@ -183,4 +192,5 @@ Go unleash the power of zero knowledge proofs on Algorand!
 Let us now what you create so that we can curate a list of zk applications.
 
 ### GPG key
-All release tags are signed by the GPG key 81E0FB63130466B782D4859D6C036245DBDB025D
+All release tags are currently signed by the GPG key 3BCAD2CB70EDF387D682A2C0767CDA51BA8C0284.  
+Check the [CHANGELOG](https://github.com/giuliop/AlgoPlonk/blob/main/CHANGELOG.md) for keys used by older releases.

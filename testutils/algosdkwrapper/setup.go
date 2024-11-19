@@ -5,6 +5,9 @@ package algosdkwrapper
 import (
 	"fmt"
 	"log"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/algorand/go-algorand-sdk/v2/client/kmd"
@@ -13,25 +16,66 @@ import (
 	"github.com/algorand/go-algorand-sdk/v2/crypto"
 )
 
-// default parameters for the local network, override them if needed
+// default parameters for algokit local network.
+// Override them if needed, for instance by using the SetDevNet func below
 var (
-	ALGOD_URL   = "http://localhost:4001"
-	ALGOD_TOKEN = strings.Repeat("a", 64)
+	algodURL   = "http://localhost:4001"
+	algodToken = strings.Repeat("a", 64)
 
-	INDEXER_URL   = "http://localhost:8980"
-	INDEXER_TOKEN = strings.Repeat("a", 64)
+	indexerURL   = "http://localhost:8980"
+	indexerToken = strings.Repeat("a", 64)
 
-	KMD_URL   = "http://localhost:4002"
-	KMD_TOKEN = strings.Repeat("a", 64)
+	kmdURL   = "http://localhost:4002"
+	kmdToken = strings.Repeat("a", 64)
 
-	KMD_WALLET_NAME     = "unencrypted-default-wallet"
-	KMD_WALLET_PASSWORD = ""
+	kmdWalletName     = "unencrypted-default-wallet"
+	kmdWalletPassword = ""
 )
+
+func init() {
+	// uncomment the line below to use a custom devnet network
+	// SetDevNet(filepath.Join(os.Getenv("HOME"), "dev/algorand/devnet/network/data"))
+}
+
+// setDevNet sets the default parameters for alogd and kmd to a local devnet
+// network with node running at dir
+func SetDevNet(dir string) {
+	algodTokenBytes, err := os.ReadFile(filepath.Join(dir, "algod.token"))
+	if err != nil {
+		log.Fatalf("failed to read algod.token: %s", err)
+	}
+	algodToken = strings.TrimSpace(string(algodTokenBytes))
+
+	algodURLBytes, err := os.ReadFile(filepath.Join(dir, "algod.net"))
+	if err != nil {
+		log.Fatalf("failed to read algod.net: %s", err)
+	}
+	algodURL = fmt.Sprintf("http://%s", strings.TrimSpace(string(algodURLBytes)))
+
+	kmdURLBytes, err := os.ReadFile(filepath.Join(dir, "kmd.net"))
+	kmdURL = fmt.Sprintf("http://%s", strings.TrimSpace(string(kmdURLBytes)))
+	if err != nil {
+		kmdURL = "http://localhost:7833"
+	}
+
+	kmdDir := dir + "/kmd-v0.5"
+	kmdTokenBytes, err := os.ReadFile(filepath.Join(kmdDir, "kmd.token"))
+	if err != nil {
+		log.Fatalf("failed to read kmd.token: %s", err)
+	}
+	kmdToken = strings.TrimSpace(string(kmdTokenBytes))
+
+	// run kmd
+	cmd := exec.Command("goal", "kmd", "start", "-d", dir)
+	if err := cmd.Run(); err != nil {
+		log.Fatalf("failed to start kmd: %s", err)
+	}
+}
 
 func GetAlgodClient() *algod.Client {
 	algodClient, err := algod.MakeClient(
-		ALGOD_URL,
-		ALGOD_TOKEN,
+		algodURL,
+		algodToken,
 	)
 	if err != nil {
 		log.Fatalf("Failed to create algod client: %s", err)
@@ -41,8 +85,8 @@ func GetAlgodClient() *algod.Client {
 
 func GetKmdClient() kmd.Client {
 	kmdClient, err := kmd.MakeClient(
-		KMD_URL,
-		KMD_TOKEN,
+		kmdURL,
+		kmdToken,
 	)
 	if err != nil {
 		log.Fatalf("Failed to create kmd client: %s", err)
@@ -52,8 +96,8 @@ func GetKmdClient() kmd.Client {
 
 func GetIndexerClient() *indexer.Client {
 	indexerClient, err := indexer.MakeClient(
-		INDEXER_URL,
-		INDEXER_TOKEN,
+		indexerURL,
+		indexerToken,
 	)
 	if err != nil {
 		log.Fatalf("Failed to create indexer client: %s", err)
@@ -71,16 +115,16 @@ func GetSandboxAccounts() ([]crypto.Account, error) {
 
 	var walletId string
 	for _, wallet := range resp.Wallets {
-		if wallet.Name == KMD_WALLET_NAME {
+		if wallet.Name == kmdWalletName {
 			walletId = wallet.ID
 		}
 	}
 
 	if walletId == "" {
-		return nil, fmt.Errorf("no wallet named %s", KMD_WALLET_NAME)
+		return nil, fmt.Errorf("no wallet named %s", kmdWalletName)
 	}
 
-	whResp, err := client.InitWalletHandle(walletId, KMD_WALLET_PASSWORD)
+	whResp, err := client.InitWalletHandle(walletId, kmdWalletPassword)
 	if err != nil {
 		return nil, fmt.Errorf("failed to init wallet handle: %+v", err)
 	}
@@ -92,7 +136,7 @@ func GetSandboxAccounts() ([]crypto.Account, error) {
 
 	var accts []crypto.Account
 	for _, addr := range addrResp.Addresses {
-		expResp, err := client.ExportKey(whResp.WalletHandleToken, KMD_WALLET_PASSWORD, addr)
+		expResp, err := client.ExportKey(whResp.WalletHandleToken, kmdWalletPassword, addr)
 		if err != nil {
 			return nil, fmt.Errorf("failed to export key: %+v", err)
 		}

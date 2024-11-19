@@ -20,14 +20,22 @@ import (
 	plonk_bn254 "github.com/consensys/gnark/backend/plonk/bn254"
 )
 
-// VerifierContractName is the name of the verifier contract.
-// Puyapy will output files starting with this name.
-const VerifierContractName = "Verifier"
+// ContractType is an enum type for the type of contract to generate
+type ContractType int
 
-// WritePuyapy generates the python code for a verifier contract
-// based on the provided verifying key and writes it to the provided writer.
-// The python code can by compiled to a smart contract using the PuyaPy compiler.
-func WritePuyaPy(vk plonk.VerifyingKey, w io.Writer) error {
+const (
+	LogicSig ContractType = iota
+	SmartContract
+)
+
+// DefaultFileName is the prefix for filenames created by PuyaPy when compiling
+// the logicsig or smart contrct verifiers (e.g., Verifier.approval.teal)
+const DefaultFileName = "Verifier"
+
+// WritePythonCode generates the python code for a verifier logicsig or smart contract
+// (as specified by outputType), based on the provided verifying key and writes it
+// to  provided writer. The python code can be compiled with the PuyaPy compiler
+func WritePythonCode(vk plonk.VerifyingKey, outputType ContractType, w io.Writer) error {
 	hasCustomGates, err := hasCustomGates(vk)
 	if err != nil {
 		return fmt.Errorf("error checking for custom gates: %v", err)
@@ -46,7 +54,7 @@ func WritePuyaPy(vk plonk.VerifyingKey, w io.Writer) error {
 				return i + 1
 			},
 			"contractName": func() string {
-				return VerifierContractName
+				return DefaultFileName
 			},
 			"frstr": func(x fr_bn254.Element) string {
 				bv := new(big.Int)
@@ -63,7 +71,11 @@ func WritePuyaPy(vk plonk.VerifyingKey, w io.Writer) error {
 				return hex.EncodeToString(b[:])
 			},
 		}
-		templ = tmplPuyaVerifierBn254
+		if outputType == LogicSig {
+			templ = tmplLogicSigVerifierBn254
+		} else {
+			templ = tmplSmartContractVerifierBn254
+		}
 
 	case *plonk_bls12381.VerifyingKey:
 		funcMap = template.FuncMap{
@@ -71,7 +83,7 @@ func WritePuyaPy(vk plonk.VerifyingKey, w io.Writer) error {
 				return i + 1
 			},
 			"contractName": func() string {
-				return VerifierContractName
+				return DefaultFileName
 			},
 			"frstr": func(x fr_bls12381.Element) string {
 				bv := new(big.Int)
@@ -97,7 +109,11 @@ func WritePuyaPy(vk plonk.VerifyingKey, w io.Writer) error {
 				return hex.EncodeToString(b[:])
 			},
 		}
-		templ = tmplPuyaVerifierBls12_381
+		if outputType == LogicSig {
+			templ = tmplLogicSigVerifierBls12_381
+		} else {
+			templ = tmplSmartContractVerifierBls12_381
+		}
 
 	default:
 		return errors.New("unsupported curve")

@@ -116,7 +116,7 @@ func main() {
 	}
 
 	fmt.Printf("\nWriting PuyaPy verifier to %s\n", puyaVerifierFilename)
-	err = compiledCircuit.WritePuyaPyVerifier(puyaVerifierFilename)
+	err = compiledCircuit.WritePuyaPyVerifier(puyaVerifierFilename, verifier.SmartContract)
 	if err != nil {
 		log.Fatalf("error writing PuyaPy verifier: %v", err)
 	}
@@ -126,7 +126,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = testutils.RenamePuyaPyOutput(verifier.VerifierContractName,
+	err = testutils.RenamePuyaPyOutput(verifier.DefaultFileName,
 		verifierName, artefactsFolder)
 	if err != nil {
 		log.Fatal(err)
@@ -160,7 +160,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to read application schema: %s", err)
 	}
-	result, err := sdk.CallVerifyMethod(app_id, nil, proofFilename,
+	result, err := testutils.CallVerifyMethod(app_id, proofFilename,
 		publicInputsFilename, schema, simulate)
 	if err != nil {
 		log.Fatalf("error calling verifier app: %v", err)

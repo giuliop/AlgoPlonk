@@ -21,6 +21,8 @@ import (
 // network by the main account. If the app is not found, it deploys it.
 // If found, it checks that the app is up to date with the latest compiled version
 // and if not it deletes it and deploys the new version.
+// To look for the app, it uses the func `GetAppByName` which looks for a global state
+// field `app_name' with value appName.
 //
 // The function expects to find the files:
 // - dir + appName + ".approval.teal"
@@ -218,7 +220,8 @@ func SendTxn(txn types.Transaction, account *crypto.Account) (
 	return &confirmedTxn, nil
 }
 
-// GetAppByName returns the app created by creatorAddress with the name appName.
+// GetAppByName returns the the first app it finds that is created by creatorAddress
+// and has a global storage field `app_name' with value appName.
 // If the app is not found, it returns nil.
 // A local network must be running
 func GetAppByName(appName string, creatorAddress string) (
@@ -241,95 +244,19 @@ func GetAppByName(appName string, creatorAddress string) (
 	return nil, nil
 }
 
-// CallVerifyMethod calls a verifier app with the given proof and public inputs.
-// If account is nil, it uses the default localnet account.
-// If simulate is true, it simulates the call instead of sending it, adding the
-// maximum extra opcode budget.
-// A local network must be running
-func CallVerifyMethod(appId uint64, account *crypto.Account, proofFilename string,
-	publicInputsFilename string, schema *Arc32Schema, simulate bool) (
-	*transaction.ABIMethodResult, error) {
-
+// BuildMethodCallParams builds the parameters to add a method call to
+// an atomic transaction composer.
+func BuildMethodCallParams(
+	appId uint64, schema *Arc32Schema,
+	methodName string, oc types.OnCompletion,
+	methodArgs []interface{}, boxes []types.AppBoxReference,
+	signer transaction.TransactionSigner,
+) (*transaction.AddMethodCallParams, error) {
 	algodClient := GetAlgodClient()
-	var err error
-	if account == nil {
-		account, err = GetDefaultAccount()
-		if err != nil {
-			return nil,
-				fmt.Errorf("failed to get localnet default account: %v", err)
-		}
-	}
-	sp, err := algodClient.SuggestedParams().Do(context.Background())
+	account, err := GetDefaultAccount()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get suggested params: %v", err)
-	}
-	verifyMethod, err := schema.Contract.GetMethodByName("verify")
-	if err != nil {
-		return nil, fmt.Errorf("failed to get verify method: %v", err)
-	}
-	proof, err := os.ReadFile(proofFilename)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read proof file: %v", err)
-	}
-	publicInputs, err := os.ReadFile(publicInputsFilename)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read public inputs file: %v", err)
-	}
-	var proofAbi, publicInputsAbi [][]byte
-	for i := 0; i < len(proof); i += 32 {
-		proofAbi = append(proofAbi, proof[i:i+32])
-	}
-	for i := 0; i < len(publicInputs); i += 32 {
-		publicInputsAbi = append(publicInputsAbi, publicInputs[i:i+32])
-	}
-
-	var atc = transaction.AtomicTransactionComposer{}
-	signer := transaction.BasicAccountTransactionSigner{Account: *account}
-	txnParams := transaction.AddMethodCallParams{
-		AppID:           appId,
-		Sender:          account.Address,
-		SuggestedParams: sp,
-		OnComplete:      types.NoOpOC,
-		Signer:          signer,
-		Method:          verifyMethod,
-		MethodArgs:      []interface{}{proofAbi, publicInputsAbi},
-	}
-	if err := atc.AddMethodCall(txnParams); err != nil {
-		return nil, fmt.Errorf("failed to add method call: %v", err)
-	}
-	if simulate {
-		simReq := models.SimulateRequest{ExtraOpcodeBudget: 320000}
-		simRes, err_ := atc.Simulate(context.Background(), algodClient, simReq)
-		if err_ != nil {
-			return nil, fmt.Errorf("failed to simulate verify txn: %v", err)
-		}
-		budgetConsumed := simRes.SimulateResponse.TxnGroups[0].AppBudgetConsumed
-		fmt.Println("Budget consumed: ", budgetConsumed)
-		abiResult := simRes.MethodResults[len(simRes.MethodResults)-1]
-		return &abiResult, nil
-	}
-	atcRes, err := atc.Execute(algodClient, context.Background(), 4)
-	if err != nil {
-		return nil, fmt.Errorf("failed to execute verify txn: %v", err)
-	}
-	return &atcRes.MethodResults[len(atcRes.MethodResults)-1], nil
-}
-
-// ExecuteAbiCall calls an abi method on an app.
-// A local network must be running
-func ExecuteAbiCall(appId uint64, account *crypto.Account, schema *Arc32Schema,
-	methodName string, oc types.OnCompletion, methodArgs []interface{},
-	boxes []types.AppBoxReference) (
-	*transaction.ExecuteResult, error) {
-
-	algodClient := GetAlgodClient()
-	var err error
-	if account == nil {
-		account, err = GetDefaultAccount()
-		if err != nil {
-			return nil, fmt.Errorf("failed to get localnet default account: %v",
-				err)
-		}
+		return nil, fmt.Errorf("failed to get localnet default account: %v",
+			err)
 	}
 	sp, err := algodClient.SuggestedParams().Do(context.Background())
 	if err != nil {
@@ -340,26 +267,76 @@ func ExecuteAbiCall(appId uint64, account *crypto.Account, schema *Arc32Schema,
 		return nil, fmt.Errorf("failed to get method %s: %v", methodName, err)
 	}
 
-	var atc = transaction.AtomicTransactionComposer{}
-	signer := transaction.BasicAccountTransactionSigner{Account: *account}
-	txnParams := transaction.AddMethodCallParams{
+	var sender types.Address
+	if signer == nil {
+		sender = account.Address
+		signer = transaction.BasicAccountTransactionSigner{Account: *account}
+	} else {
+		switch signer := signer.(type) {
+		case transaction.BasicAccountTransactionSigner:
+			sender = signer.Account.Address
+		case transaction.LogicSigAccountTransactionSigner:
+			sender, err = signer.LogicSigAccount.Address()
+			if err != nil {
+				return nil, fmt.Errorf("failed to get lsig address: %v", err)
+			}
+		default:
+			return nil, fmt.Errorf("unsupported signer type: %T", signer)
+		}
+	}
+	return &transaction.AddMethodCallParams{
 		AppID:           appId,
-		Sender:          account.Address,
+		Sender:          sender,
 		SuggestedParams: sp,
 		OnComplete:      oc,
 		Signer:          signer,
 		Method:          method,
 		MethodArgs:      methodArgs,
 		BoxReferences:   boxes,
+	}, nil
+}
+
+// ExecuteAbiCall calls an abi method on an app and returns the result.
+// If signer is nil, it uses the default localnet account for both.
+// A local network must be running
+func ExecuteAbiCall(
+	appId uint64, schema *Arc32Schema, methodName string,
+	oc types.OnCompletion, methodArgs []interface{},
+	boxes []types.AppBoxReference, signer transaction.TransactionSigner,
+	simulate bool,
+) (*transaction.ABIMethodResult, error) {
+
+	algodClient := GetAlgodClient()
+
+	var atc = transaction.AtomicTransactionComposer{}
+	txnParams, err := BuildMethodCallParams(appId, schema, methodName, oc, methodArgs,
+		boxes, signer)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build method call params: %v", err)
 	}
-	if err := atc.AddMethodCall(txnParams); err != nil {
+	if err := atc.AddMethodCall(*txnParams); err != nil {
 		return nil, fmt.Errorf("failed to add method call: %v", err)
+	}
+	if simulate {
+		simReq := models.SimulateRequest{ExtraOpcodeBudget: 320000}
+		simRes, err_ := atc.Simulate(context.Background(), algodClient, simReq)
+		if err_ != nil {
+			return nil, fmt.Errorf("failed to simulate verify txn: %v", err)
+		}
+		if simRes.SimulateResponse.TxnGroups[0].FailureMessage != "" {
+			return nil, fmt.Errorf("transaction failed: %s",
+				simRes.SimulateResponse.TxnGroups[0].FailureMessage)
+		}
+		budgetConsumed := simRes.SimulateResponse.TxnGroups[0].AppBudgetConsumed
+		fmt.Println("Budget consumed: ", budgetConsumed)
+		abiResult := simRes.MethodResults[len(simRes.MethodResults)-1]
+		return &abiResult, nil
 	}
 	res, err := atc.Execute(algodClient, context.Background(), 4)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute txn: %v", err)
 	}
-	return &res, nil
+	return &res.MethodResults[len(res.MethodResults)-1], nil
 }
 
 // GetDefaultAccount returns the default account for the local network
@@ -374,7 +351,7 @@ func GetDefaultAccount() (account *crypto.Account, err error) {
 	return &accts[0], nil
 }
 
-// EnsureFunded checks if the given address has at leastrminBalance microalgos
+// EnsureFunded checks if the given address has at least min microalgos
 // and if not funds it with twice the amount from the default account.
 // A local network must be running
 func EnsureFunded(address string, min uint64) {
@@ -403,4 +380,178 @@ func EnsureFunded(address string, min uint64) {
 			log.Fatalf("error sending payment transaction:  %v", err)
 		}
 	}
+}
+
+// DeployApp deploys a smart contract application and returns its id
+// A local network must be running with default parameters
+func DeployApp(approvalTeal []byte, clearTeal []byte) (uint64, error) {
+	algodClient := GetAlgodClient()
+
+	creator, err := GetDefaultAccount()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get localnet default account: %v", err)
+	}
+
+	var (
+		approvalBinary = make([]byte, 1000)
+		clearBinary    = make([]byte, 1000)
+	)
+
+	approvalResult, err := algodClient.TealCompile(approvalTeal).
+		Do(context.Background())
+	if err != nil {
+		return 0, fmt.Errorf("failed to compile program: %s", err)
+	}
+	_, err = base64.StdEncoding.Decode(approvalBinary, []byte(approvalResult.Result))
+	if err != nil {
+		return 0, fmt.Errorf("failed to decode compiled program: %s", err)
+	}
+
+	clearResult, err := algodClient.TealCompile(clearTeal).
+		Do(context.Background())
+	if err != nil {
+		return 0, fmt.Errorf("failed to compile program: %s", err)
+	}
+	_, err = base64.StdEncoding.Decode(clearBinary, []byte(clearResult.Result))
+	if err != nil {
+		return 0, fmt.Errorf("failed to decode compiled program: %s", err)
+	}
+
+	// Create application
+	sp, err := algodClient.SuggestedParams().Do(context.Background())
+	if err != nil {
+		return 0, fmt.Errorf("error getting suggested tx params: %s", err)
+	}
+
+	txn, err := transaction.MakeApplicationCreateTx(
+		false, approvalBinary, clearBinary,
+		types.StateSchema{}, types.StateSchema{},
+		nil, nil, nil, nil,
+		sp, creator.Address, nil,
+		types.Digest{}, [32]byte{}, types.ZeroAddress,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("failed to make txn: %s", err)
+	}
+
+	confirmedTxn, err := SendTxn(txn, creator)
+	if err != nil {
+		return 0, fmt.Errorf("error sending create transaction:  %v", err)
+	}
+	return confirmedTxn.ApplicationIndex, nil
+}
+
+// DeleteApp deletes an application by its id
+// A local network must be running with default parameters
+func DeleteApp(appId uint64) error {
+	algodClient := GetAlgodClient()
+	sender, err := GetDefaultAccount()
+	if err != nil {
+		return fmt.Errorf("failed to get localnet default account: %v", err)
+	}
+
+	sp, err := algodClient.SuggestedParams().Do(context.Background())
+	if err != nil {
+		return fmt.Errorf("failed to get suggested tx params: %v", err)
+	}
+	txn, err := transaction.MakeApplicationDeleteTx(
+		appId, nil, nil, nil, nil, sp, sender.Address, nil, types.Digest{}, [32]byte{}, types.ZeroAddress,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to make delete txn: %v", err)
+	}
+
+	_, err = SendTxn(txn, sender)
+	if err != nil {
+		return fmt.Errorf("error sending delete app transaction:  %v", err)
+	}
+	return nil
+}
+
+// LogicSigFromFile returns a logicsig account from a teal file
+// A local network must be running with default parameters
+func LogicSigFromFile(filename string) (*crypto.LogicSigAccount, error) {
+	teal, err := os.ReadFile(filename)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read program from file: %v", err)
+	}
+	algod := GetAlgodClient()
+	result, err := algod.TealCompile(teal).Do(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("failed to compile program: %v", err)
+	}
+	lsigBinary, err := base64.StdEncoding.DecodeString(result.Result)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode compiled program: %v", err)
+	}
+	return &crypto.LogicSigAccount{
+		Lsig: types.LogicSig{Logic: lsigBinary, Args: nil},
+	}, nil
+}
+
+// AddDummyTrasactions adds numberOfTxnToAdd dummy transactions to atc.
+// The last transaction will have a fee of 1 algo to cover the fee for the group.
+// A local network must be running with default parameters
+func AddDummyTrasactions(atc *transaction.AtomicTransactionComposer,
+	numberOfTxnToAdd int) error {
+	algod := GetAlgodClient()
+	account, err := GetDefaultAccount()
+	if err != nil {
+		return fmt.Errorf("failed to get localnet default account: %v", err)
+	}
+	sp, err := algod.SuggestedParams().Do(context.Background())
+	sp.FlatFee = true
+	sp.Fee = 0
+	if err != nil {
+		return fmt.Errorf("failed to get suggested params: %v", err)
+	}
+	for i := 0; i < numberOfTxnToAdd; i++ {
+		txn, err := transaction.MakePaymentTxn(account.Address.String(),
+			account.Address.String(), 0, []byte{byte(i)}, types.ZeroAddress.String(), sp)
+		if err != nil {
+			return fmt.Errorf("failed to make payment txn: %v", err)
+		}
+		if i == numberOfTxnToAdd-1 {
+			txn.Fee = 1_000_000
+		}
+		txnWithSigner := transaction.TransactionWithSigner{
+			Txn:    txn,
+			Signer: transaction.BasicAccountTransactionSigner{Account: *account},
+		}
+		if err := atc.AddTransaction(txnWithSigner); err != nil {
+			return fmt.Errorf("failed to add transaction: %v", err)
+		}
+	}
+	return nil
+}
+
+// ExecuteGroup executes a transaction group composed by atc.
+// If simulate is true, it simulates the group instead of sending it.
+// A local network must be running with default parameters
+func ExecuteGroup(atc *transaction.AtomicTransactionComposer, simulate bool,
+) (*transaction.ExecuteResult, error) {
+	algod := GetAlgodClient()
+	if simulate {
+		simReq := models.SimulateRequest{ExtraOpcodeBudget: 320000}
+		simRes, err := atc.Simulate(context.Background(), algod, simReq)
+		if err != nil {
+			return nil, fmt.Errorf("failed to simulate verify txn: %v", err)
+		}
+		trxError := simRes.SimulateResponse.TxnGroups[0].FailureMessage
+		if trxError != "" {
+			return nil, fmt.Errorf("transaction failed: %s", trxError)
+		}
+		appBudgetConsumed := simRes.SimulateResponse.TxnGroups[0].AppBudgetConsumed
+		fmt.Println("App opcode budget consumed: ", appBudgetConsumed)
+
+		lsigBudgetConsumed := simRes.SimulateResponse.TxnGroups[0].TxnResults[0].LogicSigBudgetConsumed
+		fmt.Println("LogicSig budget consumed: ", lsigBudgetConsumed)
+
+		return nil, nil
+	}
+	res, err := atc.Execute(algod, context.Background(), 4)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute txn: %v", err)
+	}
+	return &res, nil
 }

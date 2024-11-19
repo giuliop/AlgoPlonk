@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.1.6
+*Date: 2025-01-03*
+
+### Added
+- **New Feature: Logicsig Verifiers**
+  - `AlgoPlonk` now supports the generation of **logicsig verifiers** in addition to **smart contract verifiers**
+
+### Changed
+- **API changes**:
+  - Changed signature of `WritePuyaPyVerifier` to include `verifier.OutputType` for specifying verifier types (`LogicSig` or `SmartContract`)
+- **testutils package**:
+  - overhauled to better support testing
+  - added support to use a custom devnet in addition to algokit localnet
+- **Dependencies**
+  - Go v1.22
+  - gnark v0.11.0
+  - gnark-crypto v0.14.0
+
+### GPG Key
+The signing GPG key is now `3BCAD2CB70EDF387D682A2C0767CDA51BA8C0284`, changed from `81E0FB63130466B782D4859D6C036245DBDB025D`.
+
 ## v0.1.5
 *Date: 2024-05-13*
 
@@ -22,7 +43,6 @@
 
 ### Changed
 - **API changes**:
-
   - Renamed `WriteProofAndPublicInputs` to `ExportProofAndPublicInputs`
   - Changed signature of `WriteProof` and `WritePublicInputs` to accept an `io.Writer` instead of a filename string
   - Modified the type of the smart contracts verifier method arguments to `DynamicArray` from `StaticArray` for better ease of passing methods in
