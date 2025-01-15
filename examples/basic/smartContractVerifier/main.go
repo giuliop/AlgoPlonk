@@ -19,6 +19,7 @@ import (
 	"github.com/giuliop/algoplonk/setup"
 	"github.com/giuliop/algoplonk/testutils"
 	sdk "github.com/giuliop/algoplonk/testutils/algosdkwrapper"
+	"github.com/giuliop/algoplonk/utils"
 	"github.com/giuliop/algoplonk/verifier"
 )
 
@@ -74,11 +75,11 @@ func main() {
 	}
 
 	fmt.Print("\nCompiling verifier app with puyapy: ")
-	err = testutils.CompileWithPuyaPy(puyaVerifierFilename, "")
+	err = utils.CompileWithPuyaPy(puyaVerifierFilename, "")
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = testutils.RenamePuyaPyOutput(verifier.DefaultFileName,
+	err = utils.RenamePuyaPyOutput(verifier.DefaultFileName,
 		verifierName, artefactsFolder)
 	if err != nil {
 		log.Fatal(err)

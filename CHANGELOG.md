@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.1.7
+*Date: 2025-10-16*
+
+### Added
+- **utils package**
+  - New `utils` package which includes functions and types to support compilation and serialization / deserialization
+
+### Changed
+- **testutils package**
+  - Functions and types related to compilation and serialization / deserialization moved to new utils package:
+    - `func CompileWithPuyaPy`
+    - `func RenamePuyaPyOutput`
+    - `func AbiEncodeProofAndPublicInputs`
+    - `func SerializeCompiledCircuit`
+    - `func DeserializeCompiledCircuit`
+    - `type CompiledCircuitBytes`
+
 ## v0.1.6
 *Date: 2025-01-03*
 

@@ -21,6 +21,7 @@ import (
 	ap "github.com/giuliop/algoplonk"
 	"github.com/giuliop/algoplonk/setup"
 	sdk "github.com/giuliop/algoplonk/testutils/algosdkwrapper"
+	"github.com/giuliop/algoplonk/utils"
 	"github.com/giuliop/algoplonk/verifier"
 )
 
@@ -121,12 +122,12 @@ func TestLogicsigVerifier(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		err = CompileWithPuyaPy(puyaVerifierFilename, "")
+		err = utils.CompileWithPuyaPy(puyaVerifierFilename, "")
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		err = RenamePuyaPyOutput(verifier.DefaultFileName, verifierName,
+		err = utils.RenamePuyaPyOutput(verifier.DefaultFileName, verifierName,
 			artefactsFolder)
 		if err != nil {
 			t.Fatal(err)
@@ -270,11 +271,11 @@ func TestSmartContractVerifier(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		err = CompileWithPuyaPy(puyaVerifierFilename, "")
+		err = utils.CompileWithPuyaPy(puyaVerifierFilename, "")
 		if err != nil {
 			t.Fatal(err)
 		}
-		err = RenamePuyaPyOutput(verifier.DefaultFileName,
+		err = utils.RenamePuyaPyOutput(verifier.DefaultFileName,
 			verifierName, artefactsFolder)
 		if err != nil {
 			t.Fatal(err)
@@ -289,7 +290,7 @@ func TestSmartContractVerifier(t *testing.T) {
 			t.Fatalf("failed to read public inputs file: %v", err)
 		}
 
-		args, err := AbiEncodeProofAndPublicInputs(proof, publicInputs)
+		args, err := utils.AbiEncodeProofAndPublicInputs(proof, publicInputs)
 		if err != nil {
 			t.Fatalf("error abi encoding proof and public inputs: %v", err)
 		}
@@ -402,11 +403,11 @@ func TestAVMVerifierMutability(t *testing.T) {
 		t.Fatalf("error writing PuyaPy verifier: %v", err)
 	}
 
-	err = CompileWithPuyaPy(puyaVerifierFilename, "")
+	err = utils.CompileWithPuyaPy(puyaVerifierFilename, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = RenamePuyaPyOutput(verifier.DefaultFileName,
+	err = utils.RenamePuyaPyOutput(verifier.DefaultFileName,
 		verifierName, artefactsFolder)
 	if err != nil {
 		t.Fatal(err)

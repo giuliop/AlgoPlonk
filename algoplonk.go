@@ -67,8 +67,7 @@ func (cc *CompiledCircuit) WritePuyaPyVerifier(filepath string,
 	return err
 }
 
-// Verify generates a proof from a circuit assignment and verifies it
-// using gnark
+// Verify generates a verified proof from a circuit assignment.
 func (cc *CompiledCircuit) Verify(assignment frontend.Circuit,
 ) (*VerifiedProof, error) {
 	witness, err := frontend.NewWitness(assignment, cc.Curve.ScalarField())
