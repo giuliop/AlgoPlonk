@@ -62,6 +62,28 @@ func RenamePuyaPyOutput(oldname string, newname string, dir string) error {
 	return nil
 }
 
+// shouldRecompile returns true if sourcePath is more recent than any of the files in
+// targetPaths or if it encounters any error
+func ShouldRecompile(sourcePath string, targetPaths ...string) bool {
+	sourceFile, err := os.Stat(sourcePath)
+	if err != nil {
+		return true
+	}
+	sourceModTime := sourceFile.ModTime()
+
+	for _, targetPath := range targetPaths {
+		outputFile, err := os.Stat(targetPath)
+		if err != nil {
+			return true
+		}
+		outputModTime := outputFile.ModTime()
+		if sourceModTime.After(outputModTime) {
+			return true
+		}
+	}
+	return false
+}
+
 // AbiEncodeProofAndPublicInputs encodes the []byte proof and public inputs into the ABI
 // format expected by the verifiers
 func AbiEncodeProofAndPublicInputs(proof []byte, publicInputs []byte) ([]interface{}, error) {

@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.1.8
+*Date: 2025-10-17*
+
+### Added
+- **utils package**
+  - Added `func ShouldRecompile` helper to determine if source files need recompilation
+
 ## v0.1.7
 *Date: 2025-10-16*
 
