@@ -64,20 +64,20 @@ func RenamePuyaPyOutput(oldname string, newname string, dir string) error {
 
 // shouldRecompile returns true if sourcePath is more recent than any of the files in
 // targetPaths or if it encounters any error
-func ShouldRecompile(sourcePath string, targetPaths ...string) bool {
-	sourceFile, err := os.Stat(sourcePath)
+func ShouldRecompile(targetPath string, sourcePaths ...string) bool {
+	targetFile, err := os.Stat(targetPath)
 	if err != nil {
 		return true
 	}
-	sourceModTime := sourceFile.ModTime()
+	targetModTime := targetFile.ModTime()
 
-	for _, targetPath := range targetPaths {
-		outputFile, err := os.Stat(targetPath)
+	for _, sourcePath := range sourcePaths {
+		sourceFile, err := os.Stat(sourcePath)
 		if err != nil {
 			return true
 		}
-		outputModTime := outputFile.ModTime()
-		if sourceModTime.After(outputModTime) {
+		sourceModTime := sourceFile.ModTime()
+		if sourceModTime.After(targetModTime) {
 			return true
 		}
 	}
