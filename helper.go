@@ -9,7 +9,7 @@ import (
 	"github.com/consensys/gnark/backend/witness"
 )
 
-// marshalProof marshals a plonk proof to a binary blob
+// MarshalProof marshals a plonk proof to a binary blob
 func MarshalProof(proof plonk.Proof) []byte {
 	var data []byte
 	switch _proof := proof.(type) {

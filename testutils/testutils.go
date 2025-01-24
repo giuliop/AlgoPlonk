@@ -85,7 +85,7 @@ func CallVerifyMethod(appId uint64, proofFilename string, publicInputsFilename s
 	if err != nil {
 		return nil, fmt.Errorf("failed to read public inputs file: %v", err)
 	}
-	args, err := utils.AbiEncodeProofAndPublicInputs(proof, publicInputs)
+	args, err := utils.ProofAndPublicInputsForAtomicComposer(proof, publicInputs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode proof and public inputs: %v", err)
 	}
@@ -100,7 +100,7 @@ func CallVerifyMethod(appId uint64, proofFilename string, publicInputsFilename s
 func CallLogicSigVerifier(appId uint64, schema *sdk.Arc32Schema,
 	lsig *crypto.LogicSigAccount, proof []byte, publicInputs []byte, simulate bool,
 ) error {
-	args, err := utils.AbiEncodeProofAndPublicInputs(proof, publicInputs)
+	args, err := utils.ProofAndPublicInputsForAtomicComposer(proof, publicInputs)
 	if err != nil {
 		return fmt.Errorf("failed to encode proof and public inputs: %v", err)
 	}

@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/algorand/avm-abi/abi"
 	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/backend/plonk"
 	ap "github.com/giuliop/algoplonk"
@@ -84,22 +85,6 @@ func ShouldRecompile(targetPath string, sourcePaths ...string) bool {
 	return false
 }
 
-// AbiEncodeProofAndPublicInputs encodes the []byte proof and public inputs into the ABI
-// format expected by the verifiers
-func AbiEncodeProofAndPublicInputs(proof []byte, publicInputs []byte) ([]interface{}, error) {
-	if len(proof)%32 != 0 || len(publicInputs)%32 != 0 {
-		return nil, fmt.Errorf("proof and public inputs must be 32-byte aligned")
-	}
-	var proofAbi, publicInputsAbi [][]byte
-	for i := 0; i < len(proof); i += 32 {
-		proofAbi = append(proofAbi, proof[i:i+32])
-	}
-	for i := 0; i < len(publicInputs); i += 32 {
-		publicInputsAbi = append(publicInputsAbi, publicInputs[i:i+32])
-	}
-	return []interface{}{proofAbi, publicInputsAbi}, nil
-}
-
 // CompiledCircuitBytes contains the compiled circuit pre-serialized to bytes
 type CompiledCircuitBytes struct {
 	Ccs   []byte
@@ -169,4 +154,71 @@ func DeserializeCompiledCircuit(filepath string) (*ap.CompiledCircuit, error) {
 	}
 
 	return cc, nil
+}
+
+// ProofAndPublicInputsForAtomicComposer takes a proof and public input binary blob and
+// returns them in an []interface{} slice for AtomicTransactionComposer to make app args as
+// expected by the verifiers
+func ProofAndPublicInputsForAtomicComposer(proof []byte, publicInputs []byte,
+) ([]interface{}, error) {
+
+	if len(proof)%32 != 0 || len(publicInputs)%32 != 0 {
+		return nil, fmt.Errorf("proof and public inputs must be 32-byte aligned")
+	}
+	proofAbi := chunks(proof)
+	publicInputsAbi := chunks(publicInputs)
+
+	return []interface{}{proofAbi, publicInputsAbi}, nil
+}
+
+// AbiEncodeProofAndPublicInputs takes a proof and public input binary blob and encodes them
+// itto the ABI format expected by the verifiers
+func AbiEncodeProofAndPublicInputs(proof []byte, publicInputs []byte) ([][]byte, error) {
+
+	if len(proof)%32 != 0 || len(publicInputs)%32 != 0 {
+		return nil, fmt.Errorf("proof and public inputs must be 32-byte aligned")
+	}
+
+	proofAbi := chunks(proof)
+	publicInputsAbi := chunks(publicInputs)
+
+	encodedProof, err := encodeARC4(proofAbi)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode proof: %v", err)
+	}
+	encodedPublicInputs, err := encodeARC4(publicInputsAbi)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode public inputs: %v", err)
+	}
+	return [][]byte{encodedProof, encodedPublicInputs}, nil
+}
+
+// encodeARC4 encodes a proof or public inputs into the ABI format expected by the verifiers
+func encodeARC4(input [][]byte) ([]byte, error) {
+	arcType, err := abi.TypeOf("byte[32][]")
+	if err != nil {
+		return nil, fmt.Errorf("failed to define ABI type: %v", err)
+	}
+	interfaceArray := make([]interface{}, len(input))
+	for i, b := range input {
+		interfaceArray[i] = b
+	}
+	encoded, err := arcType.Encode(interfaceArray)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode ARC4 array: %v", err)
+	}
+	return encoded, nil
+}
+
+// chunks splits a byte slice into 32-byte chunks
+// it panics if the input slice is not 32-byte aligned
+func chunks(data []byte) [][]byte {
+	if len(data)%32 != 0 {
+		panic("data must be 32-byte aligned")
+	}
+	var chunks [][]byte
+	for i := 0; i < len(data); i += 32 {
+		chunks = append(chunks, data[i:i+32])
+	}
+	return chunks
 }

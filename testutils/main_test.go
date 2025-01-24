@@ -290,7 +290,7 @@ func TestSmartContractVerifier(t *testing.T) {
 			t.Fatalf("failed to read public inputs file: %v", err)
 		}
 
-		args, err := utils.AbiEncodeProofAndPublicInputs(proof, publicInputs)
+		args, err := utils.ProofAndPublicInputsForAtomicComposer(proof, publicInputs)
 		if err != nil {
 			t.Fatalf("error abi encoding proof and public inputs: %v", err)
 		}

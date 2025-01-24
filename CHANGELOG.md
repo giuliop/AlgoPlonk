@@ -6,6 +6,9 @@
 ### Added
 - **utils package**
   - Added `func ShouldRecompile` helper to determine if source files need recompilation
+  - Split `func AbiEncodeProofAndPublicInputs` into two functions:
+    - `func AbiEncodeProofAndPublicInputs` to encode the proof and public inputs in abi format
+    - `func ProofAndPublicInputsForAtomicComposer` to return the proof and public inputs as expected by the AtomicTransactionComposer to create the app args
 
 ## v0.1.7
 *Date: 2025-10-16*
