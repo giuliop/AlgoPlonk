@@ -102,7 +102,7 @@ func DeployArc4AppIfNeeded(appName string, dir string) (
 	if err != nil {
 		return 0, fmt.Errorf("failed to get create method: %v", err)
 	}
-	extraPages := uint32(len(approvalBin)) / 2048
+	extraPages := (uint32(len(approvalBin)) + uint32(len(clearBin))) / 2048
 	if extraPages > 3 {
 		return 0, fmt.Errorf("approval program too large even for extra pages: "+
 			"%d bytes", len(approvalBin))
