@@ -1,17 +1,22 @@
 # Changelog
 
 ## v0.1.8
-*Date: 2025-10-17*
+*Date: 2025-02-01*
 
 ### Added
 - **utils package**
   - Added `func ShouldRecompile` helper to determine if source files need recompilation
   - Split `func AbiEncodeProofAndPublicInputs` into two functions:
-    - `func AbiEncodeProofAndPublicInputs` to encode the proof and public inputs in abi format
-    - `func ProofAndPublicInputsForAtomicComposer` to return the proof and public inputs as expected by the AtomicTransactionComposer to create the app args
+    - `func AbiEncodeProofAndPublicInputs` to encode the proof and public inputs in abi format for manual transaction construction
+    - `func ProofAndPublicInputsForAtomicComposer` to encode the proof and public inputs as expected by the AtomicTransactionComposer to create the app args
+
+### Changed
+- **Dependencies**
+  - gnark v0.12.0
+  - gnark-crypto v0.15.0
 
 ## v0.1.7
-*Date: 2025-10-16*
+*Date: 2025-01-16*
 
 ### Added
 - **utils package**
