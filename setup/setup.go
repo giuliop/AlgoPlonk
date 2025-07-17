@@ -30,6 +30,7 @@ type Name int
 const (
 	PerpetualPowersOfTauBN254 Name = iota
 	EthereumKzgCeremonyBLS12381
+	DuskBLS12381
 	TestOnlyBN254
 	TestOnlyBLS12381
 )
@@ -57,6 +58,11 @@ var Setups = map[Name]Setup{
 		NamePath: "EethereumKzgCeremonyBLS12_381",
 		Trusted:  true,
 	},
+	DuskBLS12381: {
+		Curve:    ecc.BLS12_381,
+		NamePath: "DuskBLS12_381",
+		Trusted:  true,
+	},
 	TestOnlyBN254: {
 		Curve:    ecc.BN254,
 		NamePath: "test_only",
@@ -75,6 +81,8 @@ var Setups = map[Name]Setup{
 //go:embed EethereumKzgCeremonyBLS12_381/vk.bin
 //go:embed PerpetualPowersOfTauBN254/pk.bin
 //go:embed PerpetualPowersOfTauBN254/vk.bin
+//go:embed DuskBLS12_381/pk.bin
+//go:embed DuskBLS12_381/vk.bin
 var embeddedFiles embed.FS
 
 // Run sets up a plonk system using either a trusted or test only setup,
