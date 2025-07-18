@@ -63,8 +63,8 @@ func RenamePuyaPyOutput(oldname string, newname string, dir string) error {
 	return nil
 }
 
-// shouldRecompile returns true if sourcePath is more recent than any of the files in
-// targetPaths or if it encounters any error
+// shouldRecompile returns true if targetPath is more recent than any of the files in
+// sourcePahts or if it encounters any error
 func ShouldRecompile(targetPath string, sourcePaths ...string) bool {
 	targetFile, err := os.Stat(targetPath)
 	if err != nil {
