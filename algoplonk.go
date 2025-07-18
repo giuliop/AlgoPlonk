@@ -34,16 +34,20 @@ type VerifiedProof struct {
 // The curves supported by the AVM are ecc.BN254 and ecc.BLS12_381.
 // setupConf specifies whether to run a `Trusted` setup or a `TestOnly' setup,
 // the latter not suitable for production.
-func Compile(circuit frontend.Circuit, curve ecc.ID, setupConf setup.Conf) (
+func Compile(circuit frontend.Circuit, curve ecc.ID, setupConfig setup.Name) (
 	*CompiledCircuit, error) {
 	if curve != ecc.BN254 && curve != ecc.BLS12_381 {
 		return nil, fmt.Errorf("unsupported curve: %v", curve)
+	}
+	if curve != setup.Setups[setupConfig].Curve {
+		return nil, fmt.Errorf("setup curve %v does not match circuit curve %v",
+			setup.Setups[setupConfig].Curve, curve)
 	}
 	ccs, err := frontend.Compile(curve.ScalarField(), scs.NewBuilder, circuit)
 	if err != nil {
 		return nil, fmt.Errorf("error compiling circuit: %v", err)
 	}
-	provingKey, verifyingKey, err := setup.Run(ccs, curve, setupConf)
+	provingKey, verifyingKey, err := setup.Run(ccs, setupConfig)
 	if err != nil {
 		return nil, fmt.Errorf("error setting up Plonk: %v", err)
 	}

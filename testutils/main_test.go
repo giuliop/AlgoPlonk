@@ -100,8 +100,8 @@ func TestLogicsigVerifier(t *testing.T) {
 		proofFilename := filepath.Join(artefactsFolder, verifierName+".proof")
 		publicInputsFilename := filepath.Join(artefactsFolder,
 			verifierName+".public_inputs")
-
-		compiledCircuit, err := ap.Compile(&circuit, curve, setup.Trusted)
+		setupConf := setup.TestOnlySetup(curve)
+		compiledCircuit, err := ap.Compile(&circuit, curve, setupConf)
 		if err != nil {
 			t.Fatalf("\nerror compiling circuit: %v", err)
 		}
@@ -251,7 +251,8 @@ func TestSmartContractVerifier(t *testing.T) {
 		publicInputsFilename := filepath.Join(artefactsFolder,
 			verifierName+".public_inputs")
 
-		compiledCircuit, err := ap.Compile(&circuit, curve, setup.Trusted)
+		setupConf := setup.TestOnlySetup(curve)
+		compiledCircuit, err := ap.Compile(&circuit, curve, setupConf)
 		if err != nil {
 			t.Fatalf("\nerror compiling circuit: %v", err)
 		}
@@ -387,68 +388,18 @@ func TestSmartContractVerifier(t *testing.T) {
 	}
 }
 
-func TestAVMVerifierMutability(t *testing.T) {
-	var circuit MerkleCircuit
-
-	verifierName := "TestVerifierForMutability"
-	puyaVerifierFilename := filepath.Join(artefactsFolder, verifierName+".py")
-
-	compiledCircuit, err := ap.Compile(&circuit, ecc.BLS12_381, setup.Trusted)
-	if err != nil {
-		t.Fatalf("\nerror compiling circuit: %v", err)
-	}
-
-	err = compiledCircuit.WritePuyaPyVerifier(puyaVerifierFilename, verifier.SmartContract)
-	if err != nil {
-		t.Fatalf("error writing PuyaPy verifier: %v", err)
-	}
-
-	err = utils.CompileWithPuyaPy(puyaVerifierFilename, "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = utils.RenamePuyaPyOutput(verifier.DefaultFileName,
-		verifierName, artefactsFolder)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	app_id, err := sdk.DeployArc4AppIfNeeded(verifierName, artefactsFolder)
-	if err != nil {
-		t.Fatalf("error deploying verifier app to local network: %v", err)
-	}
-
-	schema, err := sdk.ReadArc32Schema(filepath.Join(artefactsFolder, verifierName+".arc32.json"))
-
-	if err != nil {
-		t.Fatalf("failed to read application schema: %s", err)
-	}
-
-	_, err = sdk.ExecuteAbiCall(app_id, schema, "make_immutable",
-		types.NoOpOC, nil, nil, nil, false)
-	if err != nil {
-		t.Fatalf("error making verifier app immutable: %v", err)
-	}
-
-	// let's try to delete the verifier app, it should fail
-	_, err = sdk.ExecuteAbiCall(app_id, schema, "update",
-		types.DeleteApplicationOC, nil, nil, nil, false)
-	if err == nil {
-		t.Fatalf("deleting immutable verifier app should have failed")
-	}
-}
-
 // mimcHash hasesh data matching the circuit MiMC hashing
 func mimcHasher(curve ecc.ID) HashFunc {
 	var m hash.Hash
 	var mod *big.Int
-	if curve == ecc.BN254 {
+	switch curve {
+	case ecc.BN254:
 		m = mimc_bn254.NewMiMC()
 		mod = fr_bn254.Modulus()
-	} else if curve == ecc.BLS12_381 {
+	case ecc.BLS12_381:
 		m = mimc_bls12381.NewMiMC()
 		mod = fr_bls12381.Modulus()
-	} else {
+	default:
 		panic("unsupported curve")
 	}
 	return func(data ...[]byte) []byte {

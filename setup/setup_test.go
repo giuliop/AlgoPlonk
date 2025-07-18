@@ -9,9 +9,10 @@ import (
 	"github.com/consensys/gnark-crypto/ecc/bn254"
 )
 
-func TestTrustedSetupBN254(t *testing.T) {
+func TestTrustedSetupPerpetualPowersOfTauBN254(t *testing.T) {
 	const size = 5
-	srs, err := trustedSetupBN254(size)
+	setup := Setups[PerpetualPowersOfTauBN254]
+	srs, err := trustedSetupBN254(size, setup.NamePath)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -28,9 +29,10 @@ func TestTrustedSetupBN254(t *testing.T) {
 	}
 }
 
-func TestTrustedSetupBLS12381(t *testing.T) {
+func TestTrustedSetupEethereumKzgCeremonyBLS12_381(t *testing.T) {
 	const size = 5
-	srs, err := trustedSetupBLS12381(size)
+	setup := Setups[EthereumKzgCeremonyBLS12381]
+	srs, err := trustedSetupBLS12381(size, setup.NamePath)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -102,7 +104,7 @@ func TestTrustedSetupBLS12381(t *testing.T) {
 	}
 
 	const size2 = 32768
-	srs, err = trustedSetupBLS12381(size2)
+	srs, err = trustedSetupBLS12381(size2, setup.NamePath)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}

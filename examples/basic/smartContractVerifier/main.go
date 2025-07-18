@@ -63,7 +63,7 @@ func main() {
 	curve := ecc.BLS12_381
 
 	fmt.Println("\nCompiling circuit with gnark")
-	compiledCircuit, err := ap.Compile(&circuit, curve, setup.Trusted)
+	compiledCircuit, err := ap.Compile(&circuit, curve, setup.TestOnlyBLS12381)
 	if err != nil {
 		log.Fatalf("\nerror compiling circuit: %v", err)
 	}

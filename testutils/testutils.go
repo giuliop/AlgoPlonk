@@ -29,7 +29,8 @@ import (
 func TestCircuitWithGnark(circuit frontend.Circuit, assignment frontend.Circuit,
 	curve ecc.ID) (*ap.CompiledCircuit, *ap.VerifiedProof, error) {
 
-	cc, err := ap.Compile(circuit, curve, setup.TestOnly)
+	setupConf := setup.TestOnlySetup(curve)
+	cc, err := ap.Compile(circuit, curve, setupConf)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error compiling circuit: %v", err)
 	}

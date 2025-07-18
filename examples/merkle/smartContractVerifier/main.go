@@ -14,8 +14,8 @@ import (
 	"path/filepath"
 
 	"github.com/consensys/gnark-crypto/ecc"
-	"github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
-	crypto_mimc "github.com/consensys/gnark-crypto/ecc/bls12-381/fr/mimc"
+	"github.com/consensys/gnark-crypto/ecc/bn254/fr"
+	crypto_mimc "github.com/consensys/gnark-crypto/ecc/bn254/fr/mimc"
 
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/std/accumulator/merkle"
@@ -108,10 +108,10 @@ func main() {
 	publicInputsFilename := filepath.Join(artefactsFolder,
 		verifierName+".public_inputs")
 
-	curve := ecc.BLS12_381
+	curve := ecc.BN254
 
 	fmt.Println("\nCompiling circuit with gnark")
-	compiledCircuit, err := ap.Compile(&circuit, curve, setup.Trusted)
+	compiledCircuit, err := ap.Compile(&circuit, curve, setup.TestOnlyBN254)
 	if err != nil {
 		log.Fatalf("\nerror compiling circuit: %v", err)
 	}

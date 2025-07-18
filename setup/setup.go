@@ -17,21 +17,73 @@ import (
 	"github.com/consensys/gnark/test/unsafekzg"
 )
 
-// Conf specified what setup to run, either trusted as per doc.go or a test only
-// setup not suitable for production.
-type Conf int
+// Name specifies a setup among the available trusted setups, or a test only
+// setup not suitable for production. By convention, the setup name ends with
+// "BN254" or "BLS12_381" to indicate the curve used
+type Name int
 
+// Available setups. To add a new setup you need to:
+// 1. Add a new Name constant below with the appropriate name
+// 2. Add a new entry in the Setups map below with the appropriate curve and NamePath
+// 3. Create the setup/<NamePath> directory with the trusted setup files pk.bin and vk.bin
+// 4. Embed the files in the binary using go:embed, as shown below
 const (
-	Trusted Conf = iota
-	TestOnly
+	PerpetualPowersOfTauBN254 Name = iota
+	EthereumKzgCeremonyBLS12381
+	TestOnlyBN254
+	TestOnlyBLS12381
 )
+
+// Setup contains the parameters for a trusted or test only setup.
+// If Trusted is true, NamePath is the dir of the embedded files containing the trusted
+// setup parameters: <NamePath>/pk.bin and <NamePath>/vk.bin
+// If Trusted is false, NamePath is ignored and a test-only setup is created using unsafekzg,
+// this is NOT suitable for production.
+type Setup struct {
+	Curve    ecc.ID // the elliptic curve used by the setup
+	NamePath string // the embedded file name containing the setup
+	Trusted  bool   // whether this is a test only setup
+}
+
+// Setups is a map of available setups, indexed by their Name.
+var Setups = map[Name]Setup{
+	PerpetualPowersOfTauBN254: {
+		Curve:    ecc.BN254,
+		NamePath: "PerpetualPowersOfTauBN254",
+		Trusted:  true,
+	},
+	EthereumKzgCeremonyBLS12381: {
+		Curve:    ecc.BLS12_381,
+		NamePath: "EethereumKzgCeremonyBLS12_381",
+		Trusted:  true,
+	},
+	TestOnlyBN254: {
+		Curve:    ecc.BN254,
+		NamePath: "test_only",
+		Trusted:  false,
+	},
+	TestOnlyBLS12381: {
+		Curve:    ecc.BLS12_381,
+		NamePath: "test_only",
+		Trusted:  false,
+	},
+}
+
+// We embed the trusted setup files in the binary using go:embed
+//
+//go:embed EethereumKzgCeremonyBLS12_381/pk.bin
+//go:embed EethereumKzgCeremonyBLS12_381/vk.bin
+//go:embed PerpetualPowersOfTauBN254/pk.bin
+//go:embed PerpetualPowersOfTauBN254/vk.bin
+var embeddedFiles embed.FS
 
 // Run sets up a plonk system using either a trusted or test only setup,
 // as specified by the setup parameter.
-func Run(ccs constraint.ConstraintSystem, curve ecc.ID, setup Conf) (
+func Run(ccs constraint.ConstraintSystem, setupConfig Name) (
 	plonk.ProvingKey, plonk.VerifyingKey, error) {
 
-	if setup == TestOnly {
+	setup := Setups[setupConfig]
+	if !setup.Trusted {
 		srs, lagrangeSrs, err := unsafekzg.NewSRS(ccs)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error creating test SRS:  %v", err)
@@ -39,22 +91,21 @@ func Run(ccs constraint.ConstraintSystem, curve ecc.ID, setup Conf) (
 		return plonk.Setup(ccs, srs, lagrangeSrs)
 	}
 
-	// setup == Trusted
+	// setup.Trusted == true
 	var srs, lagrangeSrs kzg.SRS
 
 	numGates := uint64(ccs.GetNbConstraints() + ccs.GetNbPublicVariables())
 	numGates = ecc.NextPowerOfTwo(numGates) + 3
 
-	switch curve {
+	switch setup.Curve {
 	case ecc.BLS12_381:
-		_srs, err := trustedSetupBLS12381(numGates)
+		_srs, err := trustedSetupBLS12381(numGates, setup.NamePath)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error creating SRS:  %v", err)
 		}
 		srs = _srs
 		_lagrangeSrs := &kzg_bls12381.SRS{Vk: _srs.Vk}
-		lagrangeG1, err := kzg_bls12381.ToLagrangeG1(
-			_srs.Pk.G1[:len(_srs.Pk.G1)-3])
+		lagrangeG1, err := kzg_bls12381.ToLagrangeG1(_srs.Pk.G1[:len(_srs.Pk.G1)-3])
 		if err != nil {
 			return nil, nil, fmt.Errorf("error creating lagrange G1:  %v", err)
 		}
@@ -62,7 +113,7 @@ func Run(ccs constraint.ConstraintSystem, curve ecc.ID, setup Conf) (
 		lagrangeSrs = _lagrangeSrs
 
 	case ecc.BN254:
-		_srs, err := trustedSetupBN254(numGates)
+		_srs, err := trustedSetupBN254(numGates, setup.NamePath)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error creating SRS:  %v", err)
 		}
@@ -76,85 +127,86 @@ func Run(ccs constraint.ConstraintSystem, curve ecc.ID, setup Conf) (
 		lagrangeSrs = _lagrangeSrs
 
 	default:
-		return nil, nil, fmt.Errorf("unsupported curve: %v", curve)
+		return nil, nil, fmt.Errorf("unsupported curve: %v", setup.Curve)
 	}
 
 	return plonk.Setup(ccs, srs, lagrangeSrs)
 }
 
-//go:embed bls12_381/pk.bin bls12_381/vk.bin bn254/pk.bin bn254/vk.bin
-var embeddedFiles embed.FS
+func TestOnlySetup(curve ecc.ID) Name {
+	switch curve {
+	case ecc.BLS12_381:
+		return TestOnlyBLS12381
+	case ecc.BN254:
+		return TestOnlyBN254
+	default:
+		panic(fmt.Sprintf("unsupported curve: %v", curve))
+	}
+}
 
 // trustedSetupBLS12381 returns trusted parameters for BLS12-381
-func trustedSetupBLS12381(size uint64) (*kzg_bls12381.SRS, error) {
-	if size < 2 {
-		return nil, fmt.Errorf("size must be at least 2")
+func trustedSetupBLS12381(size uint64, setupName string) (*kzg_bls12381.SRS, error) {
+
+	G1s, vkData, err := loadTrustedSetupBytes(setupName, size,
+		bls12381.SizeOfG1AffineCompressed)
+	if err != nil {
+		return nil, fmt.Errorf("error loading trusted setup files: %v", err)
 	}
+
 	var srs kzg_bls12381.SRS
-
-	G1s, err := embeddedFiles.ReadFile("bls12_381/pk.bin")
-	if err != nil {
-		return nil, fmt.Errorf("error opening pk.bin file: %v", err)
-	}
-
-	// the first 4 bytes of the file are the size of the G1 array
-	G1s = G1s[:4+size*bls12381.SizeOfG1AffineCompressed]
-
-	LenG1Params := G1s[:4]
-	LenG1ParamsN := uint64(binary.BigEndian.Uint32(LenG1Params))
-	if LenG1ParamsN < size {
-		return nil, fmt.Errorf("you required %d G1 parameters, but only %d are "+
-			"available", size, LenG1ParamsN)
-	}
-
-	newSize := make([]byte, 4)
-	binary.BigEndian.PutUint32(newSize, uint32(size))
-	copy(G1s[:4], newSize)
-
 	srs.Pk.ReadFrom(bytes.NewReader(G1s))
-
-	vkData, err := embeddedFiles.ReadFile("bls12_381/vk.bin")
-	if err != nil {
-		return nil, fmt.Errorf("error opening vk.bin file: %v", err)
-	}
 	srs.Vk.ReadFrom(bytes.NewReader(vkData))
 
 	return &srs, nil
 }
 
 // trustedSetupBN254 returns trusted parameters for BN254
-func trustedSetupBN254(size uint64) (*kzg_bn254.SRS, error) {
-	if size < 2 {
-		return nil, fmt.Errorf("size must be at least 2")
+func trustedSetupBN254(size uint64, setupName string) (*kzg_bn254.SRS, error) {
+
+	G1s, vkData, err := loadTrustedSetupBytes(setupName, size,
+		bn254.SizeOfG1AffineCompressed)
+	if err != nil {
+		return nil, fmt.Errorf("error loading trusted setup files: %v", err)
 	}
+
 	var srs kzg_bn254.SRS
-
-	G1s, err := embeddedFiles.ReadFile("bn254/pk.bin")
-	if err != nil {
-		return nil, fmt.Errorf("error opening pk.bin file: %v", err)
-	}
-
-	// the first 4 bytes of the file are the size of the G1 array
-	G1s = G1s[:4+size*bn254.SizeOfG1AffineCompressed]
-
-	LenG1Params := G1s[:4]
-	LenG1ParamsN := uint64(binary.BigEndian.Uint32(LenG1Params))
-	if LenG1ParamsN < size {
-		return nil, fmt.Errorf("you required %d G1 parameters, but only %d are "+
-			"available", size, LenG1ParamsN)
-	}
-
-	newSize := make([]byte, 4)
-	binary.BigEndian.PutUint32(newSize, uint32(size))
-	copy(G1s[:4], newSize)
-
 	srs.Pk.ReadFrom(bytes.NewReader(G1s))
-
-	vkData, err := embeddedFiles.ReadFile("bn254/vk.bin")
-	if err != nil {
-		return nil, fmt.Errorf("error opening vk.bin file: %v", err)
-	}
 	srs.Vk.ReadFrom(bytes.NewReader(vkData))
 
 	return &srs, nil
+}
+
+// loadTrustedSetupBytes loads the trusted setup parameters from the embedded filesystem.
+func loadTrustedSetupBytes(filename string, g1Count uint64, g1CompressedSize uint64,
+) (g1Bytes []byte, vkBytes []byte, err error) {
+
+	if g1Count < 2 {
+		return nil, nil, fmt.Errorf("need at least 2 G1 points")
+	}
+
+	pkPath := fmt.Sprintf("%s/pk.bin", filename)
+	vkPath := fmt.Sprintf("%s/vk.bin", filename)
+
+	g1Bytes, err = embeddedFiles.ReadFile(pkPath)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error opening %s: %w", pkPath, err)
+	}
+
+	vkBytes, err = embeddedFiles.ReadFile(vkPath)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error opening %s: %w", vkPath, err)
+	}
+
+	// the first 4 bytes of the pk.bin file are the size of the G1 array
+	// we check if the file is large enough to hold the required number of G1 elements
+	// both by checking the length of the file and by checking the first 4 bytes
+	bytesNeeded := 4 + g1Count*g1CompressedSize
+	declaredG1Count := uint64(binary.BigEndian.Uint32(g1Bytes[:4]))
+	if uint64(len(g1Bytes)) < bytesNeeded || declaredG1Count < g1Count {
+		return nil, nil, fmt.Errorf("pk.bin too small for %d elements", g1Count)
+	}
+	g1Bytes = g1Bytes[:bytesNeeded]
+	binary.BigEndian.PutUint32(g1Bytes[:4], uint32(g1Count))
+
+	return g1Bytes, vkBytes, nil
 }
