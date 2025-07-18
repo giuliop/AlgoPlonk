@@ -192,5 +192,5 @@ Go unleash the power of zero knowledge proofs on Algorand!
 Let us now what you create so that we can curate a list of zk applications.
 
 ### GPG key
-All release tags are currently signed by the GPG key 3BCAD2CB70EDF387D682A2C0767CDA51BA8C0284.  
+All release tags are currently signed by the GPG key 3BCAD2CB70EDF387D682A2C0767CDA51BA8C0284.
 Check the [CHANGELOG](https://github.com/giuliop/AlgoPlonk/blob/main/CHANGELOG.md) for keys used by older releases.
