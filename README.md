@@ -2,8 +2,6 @@
 
 ## The power of zero knowledge proofs on the Algorand blockchain.
 
-> **Disclaimer:** AlgoPlonk is a new project and  should be used with caution in production environments. Feedback and contributions are welcome as we work to advance the state of zero knowledge proofs on the Algorand blockchain.
-
 AlgoPlonk automatically generates a smart contract verifier from a zk circuit definition. It integrates with the [gnark](https://github.com/Consensys/gnark) toolchain, so you can use [gnark](https://github.com/Consensys/gnark) to define a plonk based zk circuit and to generate proofs for it, and use AlgoPlonk to generate an Algorand smart contract verifier that can verify those proofs.
 
 The typical workflow is the following:
@@ -36,9 +34,13 @@ Note that the maximum opcode budget a transaction group can make available on Al
 
 ### Trusted Setup
 
-AlgoPlonk provides an out of the box trusted setup for both BLS12-381 and bn256 verifiers using the [Ethereum KZG Ceremony](https://github.com/ethereum/kzg-ceremony) and the [Perpetual Powers of Tau Ceremony](https://github.com/privacy-scaling-explorations/perpetualpowersoftau), respectively.
+AlgoPlonk provides out of the box trusted setups for both BLS12-381 and BN256 verifiers.
 
-The included trusted setup can support circuits with a number of constraints up to 2^14 (16K) for BLS12-381, and 2^17 (128k) for BN254, and the latter could be extended to circuits of up to 128M constraints in the future leveraging additional parameters from the [Perpetual Powers of Tau Ceremony](https://github.com/privacy-scaling-explorations/perpetualpowersoftau).
+For BN256  the [Perpetual Powers of Tau Ceremony](https://github.com/privacy-scaling-explorations/perpetualpowersoftau) is available for circuits of up to 2^17 (128k) constraints and can be extended in the future up to 128M constraints, leveraging the additional [parameters](https://github.com/privacy-ethereum/perpetualpowersoftau?tab=readme-ov-file#prepared-and-truncated-files) from the ceremony.
+
+For BLS12-381 two trusted setup are available:
+* the [Ethereum KZG Ceremony](https://github.com/ethereum/kzg-ceremony) supports circuits up to 2^14 (16K) constraints
+* the [Dusk Network Ceremony](https://github.com/dusk-network/trusted-setup) supports circuits up to 2^21 (2M) constraints
 
 Check the [`doc.go`](https://github.com/giuliop/AlgoPlonk/blob/main/setup/doc.go) file in the setup package for more details.
 
@@ -67,6 +69,7 @@ import (
 	"github.com/giuliop/algoplonk/setup"
 	"github.com/giuliop/algoplonk/testutils"
 	sdk "github.com/giuliop/algoplonk/testutils/algosdkwrapper"
+	"github.com/giuliop/algoplonk/utils"
 	"github.com/giuliop/algoplonk/verifier"
 )
 ```
@@ -116,13 +119,13 @@ proofFilename := filepath.Join(artefactsFolder, verifierName+".proof")
 publicInputsFilename := filepath.Join(artefactsFolder,
 	verifierName+".public_inputs")
 ```
-Let's choose a curve, we use BLS12-381 here, and compile the circuit.
+Let's choose a curve, we use BLS12-381 here, and a trusted setup, Dusk for instance, and compile the circuit.
 Then we write to file the python code for the verifier with `WritePuyaPyVerifier` and finally we compile it to a teal file.
 Note that we pass `verifier.LogicSig` to `WritePuyaPyVerifier` to specify that we want to generate logicsig verifiers.
 ```
 curve := ecc.BLS12_381
 
-compiledCircuit, err := ap.Compile(&circuit, curve, setup.Trusted)
+compiledCircuit, err := ap.Compile(&circuit, curve, setup.DuskBLS12381)
 err = compiledCircuit.WritePuyaPyVerifier(puyaVerifierFilename,
 	verifier.LogicSig)
 err = testutils.CompileWithPuyaPy(puyaVerifierFilename, "")
@@ -188,8 +191,6 @@ def verify(self, proof: ..., public_inputs: ...) -> arc4.Bool:
 
 ### Next steps
 Go unleash the power of zero knowledge proofs on Algorand!
-
-Let us now what you create so that we can curate a list of zk applications.
 
 ### GPG key
 All release tags are currently signed by the GPG key 3BCAD2CB70EDF387D682A2C0767CDA51BA8C0284.

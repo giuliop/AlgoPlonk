@@ -1,5 +1,22 @@
 # Changelog
 
+
+## v0.1.9
+*Date: 2025-10-06*
+
+### Changed
+- **setup package**
+  - Trusted setups are now named and more can be easily added
+  - Added Dusk Network trusted setup for curve BLS12-381 (https://github.com/dusk-network/trusted-setup)
+
+- **Dependencies**
+  - go v1.25.0
+  - gnark v0.14.0
+  - gnark-crypto v0.19.0
+
+- **PuyaPy**
+  - Updated for use with PuyaPy 5.0
+
 ## v0.1.8
 *Date: 2025-02-01*
 

@@ -392,6 +392,6 @@ def fs(p: Bytes) -> Bytes:
 	"""If p is the point at infinity, mask the first bit with 1
 	to match gnark's encoding for the fiat-shamir challenge."""
 	if p == bzero(96):
-		return setbit_bytes(p, 0, 1)
+		return setbit_bytes(p, 0, True)
 	return p
 `

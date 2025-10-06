@@ -20,7 +20,7 @@ import (
 // CompileWithPuyaPy compiles `filepath` with puyapy, with `options'.
 // Leave `options` empty to not pass any options
 func CompileWithPuyaPy(filepath string, options string) error {
-	args := []string{"compile", "py", "-O0", filepath}
+	args := []string{"compile", "py", filepath}
 	if options != "" {
 		args = append(args, options)
 	}
