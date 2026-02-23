@@ -75,7 +75,7 @@ func CreateDirectoryIfNeeded(dir string) error {
 // of sending it, adding the maximum extra opcode budget.
 // A local network must be running
 func CallVerifyMethod(appId uint64, proofFilename string, publicInputsFilename string,
-	schema *sdk.Arc32Schema, simulate bool) (
+	schema *sdk.Arc56Schema, simulate bool) (
 	*transaction.ABIMethodResult, error) {
 
 	proof, err := os.ReadFile(proofFilename)
@@ -98,7 +98,7 @@ func CallVerifyMethod(appId uint64, proofFilename string, publicInputsFilename s
 // to pool size and opcode budget.
 // If simulate is true, it simulates the group instead of sending it.
 // A local network must be running with default parameters
-func CallLogicSigVerifier(appId uint64, schema *sdk.Arc32Schema,
+func CallLogicSigVerifier(appId uint64, schema *sdk.Arc56Schema,
 	lsig *crypto.LogicSigAccount, proof []byte, publicInputs []byte, simulate bool,
 ) error {
 	args, err := utils.ProofAndPublicInputsForAtomicComposer(proof, publicInputs)
@@ -130,7 +130,7 @@ func CallLogicSigVerifier(appId uint64, schema *sdk.Arc32Schema,
 // logicsig verifiers.
 // A local network must be running with default parameters
 func DeployAppWithVerifyMethod(workingDir string,
-) (appId uint64, schema *sdk.Arc32Schema, err error) {
+) (appId uint64, schema *sdk.Arc56Schema, err error) {
 	appName := "Arc4AppWithVerifyMethod"
 	appPythonCode := `
 import typing
@@ -174,9 +174,9 @@ class Arc4AppWithVerifyMethod(algopy.ARC4Contract):
 	if err != nil {
 		return 0, nil, fmt.Errorf("failed to deploy app: %v", err)
 	}
-	schema, err = sdk.ReadArc32Schema(filepath.Join(workingDir, appName+".arc32.json"))
+	schema, err = sdk.ReadArc56Schema(filepath.Join(workingDir, appName+".arc56.json"))
 	if err != nil {
-		return 0, nil, fmt.Errorf("failed to read arc32 schema: %v", err)
+		return 0, nil, fmt.Errorf("failed to read arc56 schema: %v", err)
 	}
 	return appId, schema, err
 }

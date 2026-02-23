@@ -302,8 +302,8 @@ func TestSmartContractVerifier(t *testing.T) {
 		}
 
 		simulate := true
-		schema, err := sdk.ReadArc32Schema(filepath.Join(artefactsFolder,
-			verifierName+".arc32.json"))
+		schema, err := sdk.ReadArc56Schema(filepath.Join(artefactsFolder,
+			verifierName+".arc56.json"))
 
 		if err != nil {
 			t.Fatalf("failed to read application schema: %s", err)

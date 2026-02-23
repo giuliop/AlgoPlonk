@@ -156,8 +156,8 @@ func main() {
 
 	fmt.Println("\nSimulating calling verifier app to verify proof")
 	simulate := true
-	schema, err := sdk.ReadArc32Schema(filepath.Join(artefactsFolder,
-		verifierName+".arc32.json"))
+	schema, err := sdk.ReadArc56Schema(filepath.Join(artefactsFolder,
+		verifierName+".arc56.json"))
 	if err != nil {
 		log.Fatalf("failed to read application schema: %s", err)
 	}
