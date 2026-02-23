@@ -17,6 +17,16 @@ import (
 	"github.com/algorand/go-algorand-sdk/v2/types"
 )
 
+// abiEncodeString egy stringet ABI formátumba kódol (DynamicArray[Byte])
+func abiEncodeString(s string) ([]byte, error) {
+    // 1. lehetőség: az abi csomag használatával (ajánlott)
+    strType, err := abi.TypeOf("string")
+    if err != nil {
+        return nil, fmt.Errorf("failed to get string type: %w", err)
+    }
+    return strType.Encode(s)
+}
+
 // DeployArc4AppIfNeeded lookups the appName among the apps deployed in the local
 // network by the main account. If the app is not found, it deploys it.
 // If found, it checks that the app is up to date with the latest compiled version
@@ -107,13 +117,17 @@ func DeployArc4AppIfNeeded(appName string, dir string) (
 		return 0, fmt.Errorf("approval program too large even for extra pages: "+
 			"%d bytes", len(approvalBin))
 	}
+	encodedAppName, err := abiEncodeString(appName)
+	if err != nil {
+    	return 0, err
+	}
 	txn, err := transaction.MakeApplicationCreateTxWithExtraPages(
 		false, approvalBin, clearBin,
 		types.StateSchema{NumUint: schema.State.Global.NumUints,
 			NumByteSlice: schema.State.Global.NumByteSlices},
 		types.StateSchema{NumUint: schema.State.Local.NumUints,
 			NumByteSlice: schema.State.Local.NumByteSlices},
-		[][]byte{createMethod.GetSelector(), []byte(appName)},
+		[][]byte{createMethod.GetSelector(), encodedAppName},
 		nil, nil, nil,
 		sp, creator.Address, nil,
 		types.Digest{}, [32]byte{}, types.ZeroAddress, extraPages,

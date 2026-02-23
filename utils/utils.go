@@ -24,6 +24,7 @@ func CompileWithPuyaPy(filepath string, options string) error {
 	if options != "" {
 		args = append(args, options)
 	}
+	args = append(args, "--output-arc32")  // make it default
 	cmd := exec.Command("algokit", args...)
 	fmt.Printf("algokit %s\n", strings.Join(args, " "))
 	out, err := cmd.CombinedOutput()
