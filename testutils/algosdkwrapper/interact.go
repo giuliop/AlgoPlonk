@@ -19,11 +19,11 @@ import (
 
 // abiEncodeString encodes a string into ABI format
 func abiEncodeString(s string) ([]byte, error) {
-    strType, err := abi.TypeOf("string")
-    if err != nil {
-        return nil, fmt.Errorf("failed to get string type: %w", err)
-    }
-    return strType.Encode(s)
+	strType, err := abi.TypeOf("string")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get string type: %w", err)
+	}
+	return strType.Encode(s)
 }
 
 // DeployArc4AppIfNeeded lookups the appName among the apps deployed in the local
@@ -118,7 +118,7 @@ func DeployArc4AppIfNeeded(appName string, dir string) (
 	}
 	encodedAppName, err := abiEncodeString(appName)
 	if err != nil {
-    	return 0, err
+		return 0, err
 	}
 	txn, err := transaction.MakeApplicationCreateTxWithExtraPages(
 		false, approvalBin, clearBin,
@@ -149,20 +149,20 @@ type Arc56Schema struct {
 		Approval string `json:"approval"`
 		Clear    string `json:"clear"`
 	} `json:"source"`
-    State struct {
-        Schema struct {  // New middle level
-            Global struct {
-                Ints   uint64 `json:"ints"`   // old: num_uints
-                Bytes  uint64 `json:"bytes"`  // old: num_byte_slices
-            } `json:"global"`
-            Local struct {
-                Ints   uint64 `json:"ints"`
-                Bytes  uint64 `json:"bytes"`
-            } `json:"local"`
-        } `json:"schema"`
-    } `json:"state"`
+	State struct {
+		Schema struct { // New middle level
+			Global struct {
+				Ints  uint64 `json:"ints"`  // old: num_uints
+				Bytes uint64 `json:"bytes"` // old: num_byte_slices
+			} `json:"global"`
+			Local struct {
+				Ints  uint64 `json:"ints"`
+				Bytes uint64 `json:"bytes"`
+			} `json:"local"`
+		} `json:"schema"`
+	} `json:"state"`
 	Methods []abi.Method `json:"methods"`
-	Name string `json:"name"`
+	Name    string       `json:"name"`
 }
 
 // ReadArc56Schema reads an ARC56 schema from a JSON file
