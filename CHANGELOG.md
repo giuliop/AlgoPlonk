@@ -1,6 +1,28 @@
 # Changelog
 
 
+## v0.1.10
+*Date: 2026-02-24*
+
+### Changed
+- **PuyaPy**
+  - Updated for ARC56 output artifacts: PuyaPy now emits `*.arc56.json` instead of `*.arc32.json`
+
+- **algosdkwrapper package** (breaking)
+  - Renamed `Arc32Schema` to `Arc56Schema` and `ReadArc32Schema` to `ReadArc56Schema`
+  - Updated `Arc56Schema` state schema structure to match the ARC56 format (`state.schema.global/local` with `ints`/`bytes` fields)
+  - Updated method lookup to use `abi.GetMethodByName` instead of `schema.Contract.GetMethodByName`
+  - `BuildMethodCallParams` and `ExecuteAbiCall` updated to accept `*Arc56Schema`
+
+- **testutils package** (breaking)
+  - `CallVerifyMethod`, `CallLogicSigVerifier`, and `DeployAppWithVerifyMethod` updated to use `*Arc56Schema`
+
+- **utils package**
+  - `RenamePuyaPyOutput` updated to handle `.arc56.json` instead of `.arc32.json`
+
+- **Dependencies**
+  - gnark-crypto v0.19.2
+
 ## v0.1.9
 *Date: 2025-10-06*
 
