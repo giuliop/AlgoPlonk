@@ -36,9 +36,9 @@ func CompileWithPuyaPy(filepath string, options string) error {
 // RenamePuyaPyOutput renames puyapy output files, e.g.,
 // 'oldname.approval.teal' is renamed to 'newname.approval.teal'.
 // It looks in `dir` for the files to rename, looking for these files:
-// oldname.approval.teal, oldname.clear.teal, oldname.arc32.json, oldname.teal
+// oldname.approval.teal, oldname.clear.teal, oldname.arc56.json, oldname.teal
 func RenamePuyaPyOutput(oldname string, newname string, dir string) error {
-	suffixes := []string{"approval.teal", "clear.teal", "arc32.json", "teal",
+	suffixes := []string{"approval.teal", "clear.teal", "arc56.json", "teal",
 		"approval.puya.map", "clear.puya.map", "puya.map"}
 	renamedAtLeastOne := false
 	for _, suffix := range suffixes {

@@ -17,6 +17,15 @@ import (
 	"github.com/algorand/go-algorand-sdk/v2/types"
 )
 
+// abiEncodeString encodes a string into ABI format
+func abiEncodeString(s string) ([]byte, error) {
+	strType, err := abi.TypeOf("string")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get string type: %w", err)
+	}
+	return strType.Encode(s)
+}
+
 // DeployArc4AppIfNeeded lookups the appName among the apps deployed in the local
 // network by the main account. If the app is not found, it deploys it.
 // If found, it checks that the app is up to date with the latest compiled version
@@ -27,7 +36,7 @@ import (
 // The function expects to find the files:
 // - dir + appName + ".approval.teal"
 // - dir + appName + ".clear.teal"
-// - dir + appName + ".arc32.json"
+// - dir + appName + ".arc56.json"
 //
 // A local network must be running
 func DeployArc4AppIfNeeded(appName string, dir string) (
@@ -45,9 +54,9 @@ func DeployArc4AppIfNeeded(appName string, dir string) (
 	if err != nil {
 		return 0, fmt.Errorf("failed to read clear program: %v", err)
 	}
-	schema, err := ReadArc32Schema(filepath.Join(dir, appName+".arc32.json"))
+	schema, err := ReadArc56Schema(filepath.Join(dir, appName+".arc56.json"))
 	if err != nil {
-		return 0, fmt.Errorf("failed to read arc32 schema: %v", err)
+		return 0, fmt.Errorf("failed to read arc56 schema: %v", err)
 	}
 
 	creator, err := GetDefaultAccount()
@@ -75,7 +84,7 @@ func DeployArc4AppIfNeeded(appName string, dir string) (
 			if err != nil {
 				return 0, fmt.Errorf("failed to get suggested params : %v", err)
 			}
-			deleteMethod, err := schema.Contract.GetMethodByName("update")
+			deleteMethod, err := abi.GetMethodByName(schema.Methods, "update")
 			if err != nil {
 				return 0, fmt.Errorf("failed to get update method: %v", err)
 			}
@@ -98,7 +107,7 @@ func DeployArc4AppIfNeeded(appName string, dir string) (
 	if err != nil {
 		return 0, fmt.Errorf("failed to get suggested params: %v", err)
 	}
-	createMethod, err := schema.Contract.GetMethodByName("create")
+	createMethod, err := abi.GetMethodByName(schema.Methods, "create")
 	if err != nil {
 		return 0, fmt.Errorf("failed to get create method: %v", err)
 	}
@@ -107,13 +116,17 @@ func DeployArc4AppIfNeeded(appName string, dir string) (
 		return 0, fmt.Errorf("approval program too large even for extra pages: "+
 			"%d bytes", len(approvalBin))
 	}
+	encodedAppName, err := abiEncodeString(appName)
+	if err != nil {
+		return 0, err
+	}
 	txn, err := transaction.MakeApplicationCreateTxWithExtraPages(
 		false, approvalBin, clearBin,
-		types.StateSchema{NumUint: schema.State.Global.NumUints,
-			NumByteSlice: schema.State.Global.NumByteSlices},
-		types.StateSchema{NumUint: schema.State.Local.NumUints,
-			NumByteSlice: schema.State.Local.NumByteSlices},
-		[][]byte{createMethod.GetSelector(), []byte(appName)},
+		types.StateSchema{NumUint: schema.State.Schema.Global.Ints,
+			NumByteSlice: schema.State.Schema.Global.Bytes},
+		types.StateSchema{NumUint: schema.State.Schema.Local.Ints,
+			NumByteSlice: schema.State.Schema.Local.Bytes},
+		[][]byte{createMethod.GetSelector(), encodedAppName},
 		nil, nil, nil,
 		sp, creator.Address, nil,
 		types.Digest{}, [32]byte{}, types.ZeroAddress, extraPages,
@@ -130,28 +143,31 @@ func DeployArc4AppIfNeeded(appName string, dir string) (
 	return confirmedTxn.ApplicationIndex, nil
 }
 
-// Arc32Schema defines a partial ARC32 schema
-type Arc32Schema struct {
+// Arc56Schema defines a partial ARC56 schema
+type Arc56Schema struct {
 	Source struct {
 		Approval string `json:"approval"`
 		Clear    string `json:"clear"`
 	} `json:"source"`
 	State struct {
-		Global struct {
-			NumByteSlices uint64 `json:"num_byte_slices"`
-			NumUints      uint64 `json:"num_uints"`
-		} `json:"global"`
-		Local struct {
-			NumByteSlices uint64 `json:"num_byte_slices"`
-			NumUints      uint64 `json:"num_uints"`
-		} `json:"local"`
+		Schema struct { // New middle level
+			Global struct {
+				Ints  uint64 `json:"ints"`  // old: num_uints
+				Bytes uint64 `json:"bytes"` // old: num_byte_slices
+			} `json:"global"`
+			Local struct {
+				Ints  uint64 `json:"ints"`
+				Bytes uint64 `json:"bytes"`
+			} `json:"local"`
+		} `json:"schema"`
 	} `json:"state"`
-	Contract abi.Contract `json:"contract"`
+	Methods []abi.Method `json:"methods"`
+	Name    string       `json:"name"`
 }
 
-// ReadArc32Schema reads an ARC32 schema from a JSON file
-func ReadArc32Schema(filepath string) (
-	schema *Arc32Schema, err error) {
+// ReadArc56Schema reads an ARC56 schema from a JSON file
+func ReadArc56Schema(filepath string) (
+	schema *Arc56Schema, err error) {
 
 	file, err := os.Open(filepath)
 	if err != nil {
@@ -247,7 +263,7 @@ func GetAppByName(appName string, creatorAddress string) (
 // BuildMethodCallParams builds the parameters to add a method call to
 // an atomic transaction composer.
 func BuildMethodCallParams(
-	appId uint64, schema *Arc32Schema,
+	appId uint64, schema *Arc56Schema,
 	methodName string, oc types.OnCompletion,
 	methodArgs []interface{}, boxes []types.AppBoxReference,
 	signer transaction.TransactionSigner,
@@ -262,7 +278,7 @@ func BuildMethodCallParams(
 	if err != nil {
 		return nil, fmt.Errorf("failed to get suggested params: %v", err)
 	}
-	method, err := schema.Contract.GetMethodByName(methodName)
+	method, err := abi.GetMethodByName(schema.Methods, methodName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get method %s: %v", methodName, err)
 	}
@@ -300,7 +316,7 @@ func BuildMethodCallParams(
 // If signer is nil, it uses the default localnet account for both.
 // A local network must be running
 func ExecuteAbiCall(
-	appId uint64, schema *Arc32Schema, methodName string,
+	appId uint64, schema *Arc56Schema, methodName string,
 	oc types.OnCompletion, methodArgs []interface{},
 	boxes []types.AppBoxReference, signer transaction.TransactionSigner,
 	simulate bool,
