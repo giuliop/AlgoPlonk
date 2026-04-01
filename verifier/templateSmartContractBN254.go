@@ -363,9 +363,11 @@ def curvemod(x: Bytes) -> BigUInt:
 
 @subroutine
 def invert(p : Bytes) -> Bytes:
-	"""Invert a point on the curve."""
+	"""Negate a point on the curve by negating the y-coordinate modulo P_MOD.
+	Uses modular reduction to correctly handle y=0 (point at infinity),
+	where P_MOD - 0 = P_MOD would produce an invalid field element."""
 	x = BigUInt.from_bytes(p[:32])
 	y = BigUInt.from_bytes(p[32:])
-	neg_y = BigUInt(P_MOD) - y
+	neg_y = (BigUInt(P_MOD) - y) % BigUInt(P_MOD)
 	return x.bytes + UInt256(neg_y).bytes
 `
