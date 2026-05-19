@@ -101,6 +101,24 @@ func CallVerifyMethod(appId uint64, proofFilename string, publicInputsFilename s
 func CallLogicSigVerifier(appId uint64, schema *sdk.Arc56Schema,
 	lsig *crypto.LogicSigAccount, proof []byte, publicInputs []byte, simulate bool,
 ) error {
+	return callLogicSigVerifier(appId, schema, lsig, proof, publicInputs,
+		types.ZeroAddress, simulate)
+}
+
+// CallLogicSigVerifierWithRekey makes an app call to appId's "verify" method
+// signed by lsig, but with the transaction RekeyTo field set.
+func CallLogicSigVerifierWithRekey(appId uint64, schema *sdk.Arc56Schema,
+	lsig *crypto.LogicSigAccount, proof []byte, publicInputs []byte,
+	rekeyTo types.Address, simulate bool,
+) error {
+	return callLogicSigVerifier(appId, schema, lsig, proof, publicInputs,
+		rekeyTo, simulate)
+}
+
+func callLogicSigVerifier(appId uint64, schema *sdk.Arc56Schema,
+	lsig *crypto.LogicSigAccount, proof []byte, publicInputs []byte,
+	rekeyTo types.Address, simulate bool,
+) error {
 	args, err := utils.ProofAndPublicInputsForAtomicComposer(proof, publicInputs)
 	if err != nil {
 		return fmt.Errorf("failed to encode proof and public inputs: %v", err)
@@ -113,6 +131,7 @@ func CallLogicSigVerifier(appId uint64, schema *sdk.Arc56Schema,
 	}
 	txnParams.SuggestedParams.Fee = 0
 	txnParams.SuggestedParams.FlatFee = true
+	txnParams.RekeyTo = rekeyTo
 
 	var atc = transaction.AtomicTransactionComposer{}
 	if err := atc.AddMethodCall(*txnParams); err != nil {

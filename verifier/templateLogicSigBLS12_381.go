@@ -36,6 +36,9 @@ def verify() -> bool:
 
 	q = BigUInt(R_MOD)
 
+	# prevent the verifier account from being rekeyed by this transaction
+	assert py.Txn.rekey_to == py.Global.zero_address
+
 	# read proof and public inputs
 	# they are passed in to an arc4 contract as DyanmicArray[Bytes32]
 	# where Bytes32 is a 32 bytes StaticArray; so we skip the first 2 bytes which encode

@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.2.0
+*Date: 2026-05-19*
+
+### Fixed
+- **verifier package**
+  - LogicSig verifier templates now correctly reject transactions that would cause the logicsig to be rekeyed.
 
 ## v0.1.10
 *Date: 2026-02-24*

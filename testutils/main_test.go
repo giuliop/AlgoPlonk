@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/algorand/go-algorand-sdk/v2/crypto"
 	"github.com/algorand/go-algorand-sdk/v2/types"
 	"github.com/consensys/gnark-crypto/ecc"
 	fr_bls12381 "github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
@@ -56,107 +57,130 @@ func (circuit *MerkleCircuit) Define(api frontend.API) error {
 	return nil
 }
 
+type logicsigVerifierTestCase struct {
+	testAppId        uint64
+	testAppSchema    *sdk.Arc56Schema
+	verifierLogicSig *crypto.LogicSigAccount
+	proof            []byte
+	publicInputs     []byte
+}
+
+func buildLogicsigVerifierTestCase(t *testing.T, curve ecc.ID) logicsigVerifierTestCase {
+	t.Helper()
+
+	hash := mimcHasher(curve)
+	zeroHashes := buildZeroHashes(MerkleTreeLevels, hash)
+	leaves := make([][]byte, 6)
+	for i := range leaves {
+		leaves[i] = []byte("leaf" + fmt.Sprint(i))
+	}
+
+	indexForProof := 3 // the fourth inserted leaf
+	leafForProof := leaves[indexForProof]
+
+	path := make([][]byte, MerkleTreeLevels+1)
+	path[0] = leafForProof
+	path[1] = hash(leaves[2])
+	path[2] = hash(hash(leaves[0]), hash(leaves[1]))
+	path[3] = hash(hash(hash(leaves[4]), hash(leaves[5])), zeroHashes[1])
+	for i := 4; i < MerkleTreeLevels+1; i++ {
+		path[i] = zeroHashes[i-1]
+	}
+
+	rootForProof := hash(path[2], hash(path[1], hash(path[0])))
+	for i := 3; i <= MerkleTreeLevels; i++ {
+		rootForProof = hash(rootForProof, path[i])
+	}
+
+	var circuit MerkleCircuit
+	var assignment MerkleCircuit
+	var pathForProof [MerkleTreeLevels + 1]frontend.Variable
+	for i := range path {
+		pathForProof[i] = path[i]
+	}
+	assignment.RootHash = rootForProof
+	assignment.Path = pathForProof
+	assignment.Index = indexForProof
+
+	verifierName := "VerifierLogicSigForCurve" + curve.String()
+
+	puyaVerifierFilename := filepath.Join(artefactsFolder, verifierName+".py")
+	proofFilename := filepath.Join(artefactsFolder, verifierName+".proof")
+	publicInputsFilename := filepath.Join(artefactsFolder,
+		verifierName+".public_inputs")
+	setupConf := setup.TestOnlySetup(curve)
+	compiledCircuit, err := ap.Compile(&circuit, curve, setupConf)
+	if err != nil {
+		t.Fatalf("\nerror compiling circuit: %v", err)
+	}
+
+	verifiedProof, err := compiledCircuit.Verify(&assignment)
+	if err != nil {
+		t.Fatalf("\nerror during verification: %v", err)
+	}
+	err = compiledCircuit.WritePuyaPyVerifier(puyaVerifierFilename,
+		verifier.LogicSig)
+	if err != nil {
+		t.Fatalf("error writing PuyaPy verifier: %v", err)
+	}
+
+	err = verifiedProof.ExportProofAndPublicInputs(proofFilename,
+		publicInputsFilename)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = utils.CompileWithPuyaPy(puyaVerifierFilename, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = utils.RenamePuyaPyOutput(verifier.DefaultFileName, verifierName,
+		artefactsFolder)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	verifierTealFile := filepath.Join(artefactsFolder, verifierName+".teal")
+	verifierLogicSig, err := sdk.LogicSigFromFile(verifierTealFile)
+	if err != nil {
+		t.Fatalf("error reading verifier logicsig: %v", err)
+	}
+
+	proof, err := os.ReadFile(proofFilename)
+	if err != nil {
+		t.Fatalf("failed to read proof file: %v", err)
+	}
+	publicInputs, err := os.ReadFile(publicInputsFilename)
+	if err != nil {
+		t.Fatalf("failed to read public inputs file: %v", err)
+	}
+
+	testAppId, testAppSchema, err := DeployAppWithVerifyMethod(artefactsFolder)
+	if err != nil {
+		t.Fatalf("error deploying test verifier app to local network: %v", err)
+	}
+
+	return logicsigVerifierTestCase{
+		testAppId:        testAppId,
+		testAppSchema:    testAppSchema,
+		verifierLogicSig: verifierLogicSig,
+		proof:            proof,
+		publicInputs:     publicInputs,
+	}
+}
+
 // TestLogicsigVerifier tests the verifier logicsig
 // for both BLS12_381 and BN254 curves
 func TestLogicsigVerifier(t *testing.T) {
 	for _, curve := range []ecc.ID{ecc.BN254, ecc.BLS12_381} {
-		hash := mimcHasher(curve)
-		zeroHashes := buildZeroHashes(MerkleTreeLevels, hash)
-		leaves := make([][]byte, 6)
-		for i := range leaves {
-			leaves[i] = []byte("leaf" + fmt.Sprint(i))
-		}
-
-		indexForProof := 3 // the fourth inserted leaf
-		leafForProof := leaves[indexForProof]
-
-		path := make([][]byte, MerkleTreeLevels+1)
-		path[0] = leafForProof
-		path[1] = hash(leaves[2])
-		path[2] = hash(hash(leaves[0]), hash(leaves[1]))
-		path[3] = hash(hash(hash(leaves[4]), hash(leaves[5])), zeroHashes[1])
-		for i := 4; i < MerkleTreeLevels+1; i++ {
-			path[i] = zeroHashes[i-1]
-		}
-
-		rootForProof := hash(path[2], hash(path[1], hash(path[0])))
-		for i := 3; i <= MerkleTreeLevels; i++ {
-			rootForProof = hash(rootForProof, path[i])
-		}
-
-		var circuit MerkleCircuit
-		var assignment MerkleCircuit
-		var pathForProof [MerkleTreeLevels + 1]frontend.Variable
-		for i := range path {
-			pathForProof[i] = path[i]
-		}
-		assignment.RootHash = rootForProof
-		assignment.Path = pathForProof
-		assignment.Index = indexForProof
-
-		verifierName := "VerifierLogicSigForCurve" + curve.String()
-
-		puyaVerifierFilename := filepath.Join(artefactsFolder, verifierName+".py")
-		proofFilename := filepath.Join(artefactsFolder, verifierName+".proof")
-		publicInputsFilename := filepath.Join(artefactsFolder,
-			verifierName+".public_inputs")
-		setupConf := setup.TestOnlySetup(curve)
-		compiledCircuit, err := ap.Compile(&circuit, curve, setupConf)
-		if err != nil {
-			t.Fatalf("\nerror compiling circuit: %v", err)
-		}
-
-		verifiedProof, err := compiledCircuit.Verify(&assignment)
-		if err != nil {
-			t.Fatalf("\nerror during verification: %v", err)
-		}
-		err = compiledCircuit.WritePuyaPyVerifier(puyaVerifierFilename,
-			verifier.LogicSig)
-		if err != nil {
-			t.Fatalf("error writing PuyaPy verifier: %v", err)
-		}
-
-		err = verifiedProof.ExportProofAndPublicInputs(proofFilename,
-			publicInputsFilename)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		err = utils.CompileWithPuyaPy(puyaVerifierFilename, "")
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		err = utils.RenamePuyaPyOutput(verifier.DefaultFileName, verifierName,
-			artefactsFolder)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		verifierTealFile := filepath.Join(artefactsFolder, verifierName+".teal")
-		verifierLogicSig, err := sdk.LogicSigFromFile(verifierTealFile)
-		if err != nil {
-			t.Fatalf("error reading verifier logicsig: %v", err)
-		}
-
-		proof, err := os.ReadFile(proofFilename)
-		if err != nil {
-			t.Fatalf("failed to read proof file: %v", err)
-		}
-		publicInputs, err := os.ReadFile(publicInputsFilename)
-		if err != nil {
-			t.Fatalf("failed to read public inputs file: %v", err)
-		}
-
+		testCase := buildLogicsigVerifierTestCase(t, curve)
+		proof := append([]byte(nil), testCase.proof...)
+		publicInputs := append([]byte(nil), testCase.publicInputs...)
 		simulate := true
 
-		testAppId, testAppSchema, err := DeployAppWithVerifyMethod(artefactsFolder)
-		if err != nil {
-			t.Fatalf("error deploying test verifier app to local network: %v", err)
-		}
-
-		err = CallLogicSigVerifier(testAppId, testAppSchema, verifierLogicSig, proof,
-			publicInputs, simulate)
+		err := CallLogicSigVerifier(testCase.testAppId, testCase.testAppSchema,
+			testCase.verifierLogicSig, proof, publicInputs, simulate)
 		if err != nil {
 			t.Fatalf("error calling logicsig verifier: %v", err)
 		}
@@ -168,8 +192,8 @@ func TestLogicsigVerifier(t *testing.T) {
 		} else {
 			publicInputs[0] = 0
 		}
-		err = CallLogicSigVerifier(testAppId, testAppSchema, verifierLogicSig, proof,
-			publicInputs, simulate)
+		err = CallLogicSigVerifier(testCase.testAppId, testCase.testAppSchema,
+			testCase.verifierLogicSig, proof, publicInputs, simulate)
 		if err == nil {
 			t.Fatalf("Logicsig successful but was expected to fail")
 		}
@@ -194,14 +218,40 @@ func TestLogicsigVerifier(t *testing.T) {
 			proof[i] = proof[i+g1PointBytes]
 		}
 
-		err = CallLogicSigVerifier(testAppId, testAppSchema, verifierLogicSig, proof,
-			publicInputs, simulate)
+		err = CallLogicSigVerifier(testCase.testAppId, testCase.testAppSchema,
+			testCase.verifierLogicSig, proof, publicInputs, simulate)
 		if err == nil {
 			t.Fatalf("Logicsig successful but was expected to fail")
 		}
 		if err != nil && !strings.Contains(err.Error(), "rejected by logic") {
 			t.Fatalf("Unexpected error: %v", err)
 		}
+	}
+}
+
+func TestLogicSigTemplatesRejectRekey(t *testing.T) {
+	for _, curve := range []ecc.ID{ecc.BN254, ecc.BLS12_381} {
+		t.Run(curve.String(), func(t *testing.T) {
+			testCase := buildLogicsigVerifierTestCase(t, curve)
+			simulate := true
+
+			err := CallLogicSigVerifier(testCase.testAppId, testCase.testAppSchema,
+				testCase.verifierLogicSig, testCase.proof, testCase.publicInputs, simulate)
+			if err != nil {
+				t.Fatalf("valid logicsig verifier call failed before rekey test: %v", err)
+			}
+
+			rekeyTo := crypto.GenerateAccount().Address
+			err = CallLogicSigVerifierWithRekey(testCase.testAppId,
+				testCase.testAppSchema, testCase.verifierLogicSig, testCase.proof,
+				testCase.publicInputs, rekeyTo, simulate)
+			if err == nil {
+				t.Fatalf("Logicsig successful but was expected to reject rekey")
+			}
+			if !strings.Contains(err.Error(), "rejected by logic") {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+		})
 	}
 }
 
