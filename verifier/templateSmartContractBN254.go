@@ -54,10 +54,50 @@ class {{ (contractName) }}(py.ARC4Contract):
 	@abimethod
 	def verify(self,
 	           proof: DynamicArray[Bytes32],
+	           public_inputs: DynamicArray[Bytes32],
+	           ) -> arc4.Bool:
+		"""Verify a proof with public inputs supplied as ABI args.
+		   Use when proof + public inputs fit within the app-args size limit;
+		   otherwise stage inputs via load_public_inputs and call verify_boxed."""
+		return self._verify(proof.copy(), public_inputs.copy())
+
+	@abimethod
+	def load_public_inputs(self, offset: UInt64, chunk: Bytes) -> None:
+		"""Stage (part of) the public-inputs blob into the 'pi' box, enabling
+		   verification of proofs whose public inputs are too large to pass as
+		   ABI args. Call first with offset=0 to (re)create the box, then with
+		   ascending offsets to fill it. The full blob is {{ .NbPublicVariables }}*32 bytes: the raw
+		   concatenation of the 32-byte public-input field elements (no ARC4
+		   length prefix)."""
+		box = py.BoxRef(key=Bytes(b"pi"))
+		if offset == UInt64(0):
+			box.delete()
+			box.create(size=UInt64({{ .NbPublicVariables }}) * UInt64(32))
+		box.replace(offset, chunk)
+
+	@abimethod
+	def verify_boxed(self,
+	                 proof: DynamicArray[Bytes32],
+	                 ) -> arc4.Bool:
+		"""Verify a proof whose public inputs were staged in the 'pi' box via
+		   load_public_inputs. Must run in the same atomic group as those
+		   load_public_inputs txns (box state is shared within the group)."""
+		box = py.BoxRef(key=Bytes(b"pi"))
+		assert box.length == UInt64({{ .NbPublicVariables }}) * UInt64(32)
+		public_inputs = DynamicArray[Bytes32]()
+		i = UInt64(0)
+		while i < UInt64({{ .NbPublicVariables }}):
+			public_inputs.append(Bytes32.from_bytes(
+				box.extract(i * UInt64(32), UInt64(32))))
+			i += UInt64(1)
+		return self._verify(proof.copy(), public_inputs.copy())
+
+	@subroutine
+	def _verify(self,
+	           proof: DynamicArray[Bytes32],
 			   public_inputs: DynamicArray[Bytes32],
 			   ) -> arc4.Bool:
-		"""Verify the proof for the given public inputs.
-		   Return a boolean indicating whether the proof is valid"""
+		"""Core PLONK verification, shared by verify and verify_boxed."""
 
 		q = BigUInt(R_MOD)
 
