@@ -36,12 +36,19 @@ const DefaultFileName = "Verifier"
 // (as specified by outputType), based on the provided verifying key and writes it
 // to  provided writer. The python code can be compiled with the PuyaPy compiler
 func WritePythonCode(vk plonk.VerifyingKey, outputType ContractType, w io.Writer) error {
-	hasCustomGates, err := hasCustomGates(vk)
+	// BSB22 commitments (gnark "custom gates") are supported for circuits that
+	// emit exactly ONE commitment — the case produced by gnark's range-checker
+	// for emulated arithmetic (e.g. RSA-2048 + SHA-256 DKIM verification). The
+	// single-commitment folding is mirrored, term for term, on gnark's own
+	// Solidity PLONK verifier (backend/plonk/bn254/solidity.go). Circuits with
+	// more than one commitment are not yet supported.
+	nbCommitments, err := nbCustomGates(vk)
 	if err != nil {
 		return fmt.Errorf("error checking for custom gates: %v", err)
 	}
-	if hasCustomGates {
-		return errors.New("custom gates are not supported at the moment")
+	if nbCommitments > 1 {
+		return fmt.Errorf("only circuits with a single BSB22 commitment are "+
+			"supported, got %d", nbCommitments)
 	}
 
 	var funcMap template.FuncMap
@@ -126,18 +133,20 @@ func WritePythonCode(vk plonk.VerifyingKey, outputType ContractType, w io.Writer
 	return t.Execute(w, vk)
 }
 
-func hasCustomGates(vk plonk.VerifyingKey) (bool, error) {
+// nbCustomGates returns the number of BSB22 commitments (custom gates) in the
+// verifying key.
+func nbCustomGates(vk plonk.VerifyingKey) (int, error) {
 	concreteVk := reflect.ValueOf(vk)
 	if concreteVk.Kind() == reflect.Ptr && !concreteVk.IsNil() {
 		concreteVk = concreteVk.Elem() // Dereference the pointer
 	}
 	valueField := concreteVk.FieldByName("CommitmentConstraintIndexes")
 	if !valueField.IsValid() {
-		return false, errors.New("commitmentConstraintIndexes not found")
+		return 0, errors.New("commitmentConstraintIndexes not found")
 	}
 	value, ok := valueField.Interface().([]uint64)
 	if !ok {
-		return false, errors.New("type assertion on verifying key failed")
+		return 0, errors.New("type assertion on verifying key failed")
 	}
-	return len(value) > 0, nil
+	return len(value), nil
 }

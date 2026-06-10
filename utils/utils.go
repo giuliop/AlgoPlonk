@@ -17,15 +17,27 @@ import (
 	ap "github.com/giuliop/algoplonk"
 )
 
-// CompileWithPuyaPy compiles `filepath` with puyapy, with `options'.
-// Leave `options` empty to not pass any options
-func CompileWithPuyaPy(filepath string, options string) error {
-	args := []string{"compile", "py", filepath}
+// CompileWithPuyaPy compiles `pyFile` with puyapy, with `options'.
+// Leave `options` empty to not pass any options.
+//
+// It invokes the `puyapy` compiler directly (rather than `algokit compile py`)
+// so that the build works in environments where puyapy is provided by a
+// dedicated Python >= 3.12 virtualenv on PATH. Output artefacts are written
+// next to the source file, matching what RenamePuyaPyOutput / the deploy
+// helpers expect.
+func CompileWithPuyaPy(pyFile string, options string) error {
+	// puyapy resolves --out-dir relative to the source file's directory, so use
+	// an absolute path to write artefacts next to the source unambiguously.
+	outDir := filepath.Dir(pyFile)
+	if abs, err := filepath.Abs(outDir); err == nil {
+		outDir = abs
+	}
+	args := []string{"--out-dir", outDir, pyFile}
 	if options != "" {
 		args = append(args, options)
 	}
-	cmd := exec.Command("algokit", args...)
-	fmt.Printf("algokit %s\n", strings.Join(args, " "))
+	cmd := exec.Command("puyapy", args...)
+	fmt.Printf("puyapy %s\n", strings.Join(args, " "))
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("%s\ncompilation failed : %s", out, err)
