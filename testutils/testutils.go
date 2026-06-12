@@ -137,7 +137,8 @@ func callLogicSigVerifier(appId uint64, schema *sdk.Arc56Schema,
 	if err := atc.AddMethodCall(*txnParams); err != nil {
 		return fmt.Errorf("failed to add method call: %v", err)
 	}
-	err = sdk.AddDummyTrasactions(&atc, 9)
+	// fill the group to 16 transactions to get maximum logicsig opcode pool budget
+	err = sdk.AddDummyTrasactions(&atc, 15)
 	if err != nil {
 		return fmt.Errorf("failed to add dummy txns: %v", err)
 	}

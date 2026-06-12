@@ -63,7 +63,7 @@ class {{ (contractName) }}(py.ARC4Contract):
 		q = BigUInt(R_MOD)
 
 		# check proof and public inputs lengths
-		assert proof.length == 33
+		assert proof.length == {{ add 33 (mul 4 (len .CommitmentConstraintIndexes)) }}
 		assert public_inputs.length == {{ .NbPublicVariables }}
 
 		### Read verifying key ###
@@ -83,6 +83,9 @@ class {{ (contractName) }}(py.ARC4Contract):
 		{{ end }}
 		VK_COSET_SHIFT = BigUInt({{ (frstr .CosetShift) }})
 
+		{{ range $index, $element := .Qcp -}}
+		VK_QCP_{{ $index }} = Bytes.from_hex("{{ hex $element }}")
+		{{ end }}
 		# Read the fiat-shamir values of the verifying key to match gnark's encoding of the point at infinity
 		VK_QL_fs = Bytes.from_hex("{{ hexEncoded .Ql }}")
 		VK_QR_fs = Bytes.from_hex("{{ hexEncoded .Qr }}")
@@ -91,6 +94,9 @@ class {{ (contractName) }}(py.ARC4Contract):
 		VK_QK_fs = Bytes.from_hex("{{ hexEncoded .Qk }}")
 		{{range $index, $element := .S }}
 		VK_S{{ inc $index }}_fs = Bytes.from_hex("{{ hexEncoded $element }}")
+		{{ end }}
+		{{ range $index, $element := .Qcp -}}
+		VK_QCP_{{ $index }}_fs = Bytes.from_hex("{{ hexEncoded $element }}")
 		{{ end }}
 
 		### Read proof ###
@@ -121,6 +127,15 @@ class {{ (contractName) }}(py.ARC4Contract):
 		# opening at zeta * omega
 		OPENING_AT_Z_OMEGA = proof[30].bytes + proof[31].bytes + proof[32].bytes
 
+		{{ if gt (len .CommitmentConstraintIndexes) 0 -}}
+		# BSB22 commitments: all qcp_i(zeta) openings first, then the commitment points
+		{{ end -}}
+		{{ range $index, $element := .CommitmentConstraintIndexes -}}
+		QCP_{{ $index }}_AT_Z = proof[{{ add 33 $index }}].bytes
+		{{ end -}}
+		{{ range $index, $element := .CommitmentConstraintIndexes -}}
+		BSB_COM_{{ $index }} = proof[{{ add (add 33 (len $.CommitmentConstraintIndexes)) (mul $index 3) }}].bytes + proof[{{ add (add 34 (len $.CommitmentConstraintIndexes)) (mul $index 3) }}].bytes + proof[{{ add (add 35 (len $.CommitmentConstraintIndexes)) (mul $index 3) }}].bytes
+		{{ end }}
 		### check proof public inputs are well-formed ###
 		if (BigUInt.from_bytes(L_AT_Z.bytes) >= q
 				or BigUInt.from_bytes(R_AT_Z.bytes) >= q
@@ -128,6 +143,9 @@ class {{ (contractName) }}(py.ARC4Contract):
 				or BigUInt.from_bytes(S1_AT_Z.bytes) >= q
 				or BigUInt.from_bytes(S2_AT_Z.bytes) >= q
 				or BigUInt.from_bytes(GRAND_PRODUCT_AT_Z_OMEGA.bytes) >= q
+				{{- range $index, $element := .CommitmentConstraintIndexes }}
+				or BigUInt.from_bytes(QCP_{{ $index }}_AT_Z) >= q
+				{{- end }}
 		):
 			{{/*}}py.log("error: invalid proof"){{*/ -}}
 			return arc4.Bool(False)
@@ -147,10 +165,10 @@ class {{ (contractName) }}(py.ARC4Contract):
 			public_inputs_bytes += public_inputs[i].bytes
 
 		gamma_pre = sha256(b'gamma' + VK_S1_fs + VK_S2_fs + VK_S3_fs + VK_QL_fs
-					+ VK_QR_fs + VK_QM_fs + VK_QO_fs + VK_QK_fs + public_inputs_bytes
+					+ VK_QR_fs + VK_QM_fs + VK_QO_fs + VK_QK_fs{{ range $index, $element := .CommitmentConstraintIndexes }} + VK_QCP_{{ $index }}_fs{{ end }} + public_inputs_bytes
 					+ fs(L_COM) + fs(R_COM) + fs(O_COM))
 		beta_pre = sha256(b'beta' + gamma_pre)
-		alpha_pre = sha256(b'alpha' + beta_pre + fs(GRAND_PRODUCT))
+		alpha_pre = sha256(b'alpha' + beta_pre{{ range $index, $element := .CommitmentConstraintIndexes }} + fs(BSB_COM_{{ $index }}){{ end }} + fs(GRAND_PRODUCT))
 		zeta_pre = sha256(b'zeta' + alpha_pre + fs(H_0) + fs(H_1) + fs(H_2))
 
 		gamma = curvemod(gamma_pre)
@@ -203,7 +221,14 @@ class {{ (contractName) }}(py.ARC4Contract):
 			tmp = (BigUInt.from_bytes(batch[i].bytes)
 				   * BigUInt.from_bytes(public_inputs[i].bytes)) % q
 			PI = (PI + tmp) % q
-
+		{{ range $index, $element := .CommitmentConstraintIndexes }}
+		# add the contribution of BSB22 commitment {{ $index }} to the public inputs:
+		# hash_fr(BSB_COM_{{ $index }}) * L_{{ add $.NbPublicVariables $element }}(zeta)
+		w_pow = expmod(VK_OMEGA, BigUInt({{ add $.NbPublicVariables $element }}), q)
+		tmp = expmod((zeta + q - w_pow) % q, q - BigUInt(2), q)
+		tmp = (tmp * ((w_pow * zn) % q)) % q
+		PI = (PI + ((hash_fr(fs(BSB_COM_{{ $index }})) * tmp) % q)) % q
+		{{ end }}
 		# compute alpha2Lagrange: alpha**2 * (z**n - 1) / (z - 1)
 		res = (zeta + q - BigUInt(1)) % q
 		res = expmod(res, q - BigUInt(2), q)
@@ -277,7 +302,10 @@ class {{ (contractName) }}(py.ARC4Contract):
 		add_term = ec.scalar_mul(EC.BLS12_381g1, VK_QM, ab.bytes)
 		lin_poly_com = ec.add(EC.BLS12_381g1, lin_poly_com, add_term)
 		lin_poly_com = ec.add(EC.BLS12_381g1, lin_poly_com, VK_QK)
-
+		{{ range $index, $element := .CommitmentConstraintIndexes }}
+		add_term = ec.scalar_mul(EC.BLS12_381g1, BSB_COM_{{ $index }}, QCP_{{ $index }}_AT_Z)
+		lin_poly_com = ec.add(EC.BLS12_381g1, lin_poly_com, add_term)
+		{{ end }}
 		add_term = ec.scalar_mul(EC.BLS12_381g1, VK_S3, s1.bytes)
 		lin_poly_com = ec.add(EC.BLS12_381g1, lin_poly_com, add_term)
 
@@ -289,9 +317,9 @@ class {{ (contractName) }}(py.ARC4Contract):
 		# generate challenge to fold the opening proofs
 		linearized_poly_at_z_bytes = bzero(32) | linearized_poly_at_z.bytes
 		r_pre = sha256(b'gamma' + UInt256(zeta).bytes + lin_poly_com
-			 + fs(L_COM) + fs(R_COM) + fs(O_COM) + VK_S1_fs + VK_S2_fs
+			 + fs(L_COM) + fs(R_COM) + fs(O_COM) + VK_S1_fs + VK_S2_fs{{ range $index, $element := .CommitmentConstraintIndexes }} + VK_QCP_{{ $index }}_fs{{ end }}
 			 + linearized_poly_at_z_bytes + L_AT_Z.bytes + R_AT_Z.bytes
-			 + O_AT_Z.bytes + S1_AT_Z.bytes + S2_AT_Z.bytes
+			 + O_AT_Z.bytes + S1_AT_Z.bytes + S2_AT_Z.bytes{{ range $index, $element := .CommitmentConstraintIndexes }} + QCP_{{ $index }}_AT_Z{{ end }}
 			 + GRAND_PRODUCT_AT_Z_OMEGA.bytes)
 		r = curvemod(r_pre)
 		r_acc = r
@@ -323,7 +351,12 @@ class {{ (contractName) }}(py.ARC4Contract):
 		add_term = ec.scalar_mul(EC.BLS12_381g1, VK_S2, r_acc.bytes)
 		digest = ec.add(EC.BLS12_381g1, digest, add_term)
 		claims = (claims + (BigUInt.from_bytes(S2_AT_Z.bytes) * r_acc)) % q
-
+		{{ range $index, $element := .CommitmentConstraintIndexes }}
+		r_acc = (r_acc * r) % q
+		add_term = ec.scalar_mul(EC.BLS12_381g1, VK_QCP_{{ $index }}, r_acc.bytes)
+		digest = ec.add(EC.BLS12_381g1, digest, add_term)
+		claims = (claims + (BigUInt.from_bytes(QCP_{{ $index }}_AT_Z) * r_acc)) % q
+		{{ end }}
 		# verify the folded proof
 		r_pre = sha256(digest + BATCH_OPENING_AT_Z + fs(GRAND_PRODUCT)
 				+ OPENING_AT_Z_OMEGA + UInt256(zeta).bytes + UInt256(r).bytes)
@@ -396,4 +429,18 @@ def fs(p: Bytes) -> Bytes:
 	if p == bzero(96):
 		return setbit_bytes(p, 0, True)
 	return p
+{{ if gt (len .CommitmentConstraintIndexes) 0 }}
+@subroutine
+def hash_fr(p: Bytes) -> BigUInt:
+	"""Hash a curve point to a field element, matching gnark's fr.Hash with
+	   domain separator 'BSB22-Plonk' (sha256-based expand_msg_xmd, 48 bytes)."""
+	dst_prime = Bytes(b'BSB22-Plonk\x0b')
+	b0 = sha256(bzero(64) + p + Bytes(b'\x00\x30\x00') + dst_prime)
+	b1 = sha256(b0 + Bytes(b'\x01') + dst_prime)
+	b2 = sha256((b0 ^ b1) + Bytes(b'\x02') + dst_prime)
+	# interpret b1 + b2[:16] as a 48-byte big-endian integer mod R_MOD
+	res = (BigUInt.from_bytes(b1)
+		   * BigUInt(340282366920938463463374607431768211456)) % BigUInt(R_MOD)
+	return (res + BigUInt.from_bytes(b2[:16])) % BigUInt(R_MOD)
+{{ end -}}
 `

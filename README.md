@@ -16,21 +16,27 @@ To ensure compatibility with gnark (and gnark-crypto if you are using it as well
 ### Supported circuits
 
 AlgoPlonk supports the plonk protocol and the curves for which the AVM offers elliptic curve operations: BN254 and BLS12-381.
-Custom gates are not supported.
+Circuits using BSB22 commitments (gnark's `frontend.Committer` interface, e.g., used by `std/rangecheck` and lookup-based gadgets) are supported. Other custom gates are not.
 
 ### Verifiers types
 
 AlgoPlonk can generate both logicsig verifiers and smart contract verifiers.
 
-A BN254 verifier consumes ~145,000 opcode budget, a BLS12-381 verifier ~185,000.
-Because of these large consumption numbers, logicsig verifiers are recommended:
-1) Each top level transaction in a transaction group offers 20,000 logicsig opcode budget for the cost of 1 minimum transaction fee, so you pay 8 (for BN254) or 10 (for BLS12-381) minimum transaction fees to verify a proof.
+A verifier consumes roughly the following opcode budget, depending on the curve and the number of BSB22 commitments in the circuit (each additional commitment adds roughly 35,000 for BN254 and 40,000 for BLS12-381):
 
-	Smart contracts get 700 opcode budget for each app call transaction in a group (top level or inner), so you have to pay ~208 (for BN254) or ~265 (for BLS12-381) minimum transaction fees to verify a proof with a smart contract verifier.
+| Curve     | No BSB22 commitments | One BSB22 commitment | Two BSB22 commitments |
+|-----------|----------------------|----------------------|-----------------------|
+| BN254     | ~145,000             | ~175,000             | ~210,000              |
+| BLS12-381 | ~185,000             | ~221,000             | ~261,000              |
+
+Because of these large consumption numbers, logicsig verifiers are recommended:
+1) Each top level transaction in a transaction group offers 20,000 logicsig opcode budget for the cost of 1 minimum transaction fee, so verifying a proof costs 8 (for BN254) or 10 (for BLS12-381) minimum transaction fees without BSB22 commitments, and 9 or 12 respectively with one commitment.
+
+	Smart contracts get 700 opcode budget for each app call transaction in a group (top level or inner), so without BSB22 commitments you have to pay ~208 (for BN254) or ~265 (for BLS12-381) minimum transaction fees to verify a proof with a smart contract verifier.
 
 2) The opcode budget for logicsig and smart contracts are separate, so by using logicsig verifiers you preserve the smart contract opcode budget for your application logic.
 
-Note that the maximum opcode budget a transaction group can make available on Algorand at the moment is 320,000 (20,000 * 16) for logicsigs and 190,400 ( (16+256) * 700 ) for smart contracts. You can achieve that by creating a group with 16 top level app calls and 256 inner app call transactions.
+Note that the maximum opcode budget a transaction group can make available on Algorand at the moment is 320,000 (20,000 * 16) for logicsigs and 190,400 ( (16+256) * 700 ) for smart contracts. You can achieve that by creating a group with 16 top level app calls and 256 inner app call transactions. Logicsig verifiers therefore have more headroom for small numbers of BSB22 commitments, while smart contract verifiers do not: a BLS12-381 smart contract verifier with even one BSB22 commitment is already above the 190,400 limit.
 
 ### Trusted Setup
 

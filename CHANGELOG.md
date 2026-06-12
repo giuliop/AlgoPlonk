@@ -1,6 +1,13 @@
 # Changelog
 
-## Unreleased
+## v0.3.0
+*Date: 2026-06-12*
+
+### Added
+- **BSB22 commitment support**: circuits using gnark's `frontend.Committer.Commit`
+  (BSB22 commitments) are now supported for both curves and both verifier types.
+  Proof export and generated verifiers now handle the additional BSB22 proof
+  data, matching gnark's reference verifiers.
 
 ### Changed
 - **setup package**

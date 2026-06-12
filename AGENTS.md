@@ -2,7 +2,7 @@ This file provides guidance to AI agents when working with code in this reposito
 
 ## What this is
 
-AlgoPlonk is a Go library that auto-generates Algorand smart contract / logicsig verifiers from gnark plonk circuits. It supports the BN254 and BLS12-381 curves (the ones with AVM elliptic curve opcodes); custom gates are not supported. Pin gnark/gnark-crypto to the versions in `go.mod` for compatibility.
+AlgoPlonk is a Go library that auto-generates Algorand smart contract / logicsig verifiers from gnark plonk circuits. It supports the BN254 and BLS12-381 curves (the ones with AVM elliptic curve opcodes) and BSB22 commitments (`frontend.Committer`); other custom gates are not supported. Pin gnark/gnark-crypto to the versions in `go.mod` for compatibility.
 
 ## Commands
 

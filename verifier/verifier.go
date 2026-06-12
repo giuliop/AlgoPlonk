@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"math/big"
-	"reflect"
 	"text/template"
 
 	bls12381 "github.com/consensys/gnark-crypto/ecc/bls12-381"
@@ -36,14 +35,6 @@ const DefaultFileName = "Verifier"
 // (as specified by outputType), based on the provided verifying key and writes it
 // to  provided writer. The python code can be compiled with the PuyaPy compiler
 func WritePythonCode(vk plonk.VerifyingKey, outputType ContractType, w io.Writer) error {
-	hasCustomGates, err := hasCustomGates(vk)
-	if err != nil {
-		return fmt.Errorf("error checking for custom gates: %v", err)
-	}
-	if hasCustomGates {
-		return errors.New("custom gates are not supported at the moment")
-	}
-
 	var funcMap template.FuncMap
 	var templ string
 	switch vk.(type) {
@@ -53,6 +44,8 @@ func WritePythonCode(vk plonk.VerifyingKey, outputType ContractType, w io.Writer
 			"inc": func(i int) int {
 				return i + 1
 			},
+			"add": templateAdd,
+			"mul": templateMul,
 			"contractName": func() string {
 				return DefaultFileName
 			},
@@ -82,6 +75,8 @@ func WritePythonCode(vk plonk.VerifyingKey, outputType ContractType, w io.Writer
 			"inc": func(i int) int {
 				return i + 1
 			},
+			"add": templateAdd,
+			"mul": templateMul,
 			"contractName": func() string {
 				return DefaultFileName
 			},
@@ -126,18 +121,26 @@ func WritePythonCode(vk plonk.VerifyingKey, outputType ContractType, w io.Writer
 	return t.Execute(w, vk)
 }
 
-func hasCustomGates(vk plonk.VerifyingKey) (bool, error) {
-	concreteVk := reflect.ValueOf(vk)
-	if concreteVk.Kind() == reflect.Ptr && !concreteVk.IsNil() {
-		concreteVk = concreteVk.Elem() // Dereference the pointer
+// templateAdd and templateMul provide integer arithmetic to the templates,
+// e.g. to compute proof offsets for the BSB22 commitment data whose position
+// depends on the number of commitments.
+func templateAdd(a, b any) int {
+	return toInt(a) + toInt(b)
+}
+
+func templateMul(a, b any) int {
+	return toInt(a) * toInt(b)
+}
+
+func toInt(v any) int {
+	switch n := v.(type) {
+	case int:
+		return n
+	case int64:
+		return int(n)
+	case uint64:
+		return int(n)
+	default:
+		panic(fmt.Sprintf("unsupported integer type %T in template", v))
 	}
-	valueField := concreteVk.FieldByName("CommitmentConstraintIndexes")
-	if !valueField.IsValid() {
-		return false, errors.New("commitmentConstraintIndexes not found")
-	}
-	value, ok := valueField.Interface().([]uint64)
-	if !ok {
-		return false, errors.New("type assertion on verifying key failed")
-	}
-	return len(value) > 0, nil
 }
