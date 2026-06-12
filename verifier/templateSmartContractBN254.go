@@ -364,10 +364,10 @@ def curvemod(x: Bytes) -> BigUInt:
 @subroutine
 def invert(p : Bytes) -> Bytes:
 	"""Invert a point on the curve."""
-	x = BigUInt.from_bytes(p[:32])
+	x = p[:32]
 	y = BigUInt.from_bytes(p[32:])
 	if y == BigUInt(0):
 		return p
 	neg_y = BigUInt(P_MOD) - y
-	return x.bytes + UInt256(neg_y).bytes
+	return x + UInt256(neg_y).bytes
 `

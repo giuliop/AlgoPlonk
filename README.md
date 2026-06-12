@@ -163,6 +163,10 @@ Life is sweet :)
 #### The logicsig verifiers ####
 The generated logicsig verifiers expect to be called signing an app call transaction and to read the proof and public inputs as the second and third application arguments of the app call (since the first app arg is reserved for the method name for arc4 smart contracts).
 
+Generated logicsig verifiers are intended to be stateless proof predicates, not escrow accounts. Their accounts should remain unfunded. Transaction fees should be paid by other transactions in the group through fee pooling.
+
+The logicsig verifies the proof/public-input pair and rejects rekeying of its account, but it does not bind itself to a specific application id, method selector, or group shape. This keeps the verifier reusable across applications. If your application needs app-specific authorization semantics, enforce those checks in the application logic that consumes the proof result.
+
 #### The smart contract verifiers ####
 The generated smart contract verifiers are [ARC4](https://github.com/algorandfoundation/ARCs/blob/main/ARCs/arc-0004.md) contracts with the following ABI methods:
 

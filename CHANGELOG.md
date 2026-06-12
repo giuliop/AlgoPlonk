@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+- **setup package**
+  - Removed the exported mutable `Setups` map. Code reading setup metadata should use `setup.Get` instead.
+  - `setup.Run` and `algoplonk.Compile` now reject unknown setup names instead of falling back to an unsafe test setup.
+
+- **Tests**
+  - `make test` now runs all package tests, including external-package tests.
+
+### Fixed
+- **verifier package**
+  - Point inversion helpers in generated verifier templates now preserve fixed-width x-coordinate encodings.
+
 ## v0.2.0
 *Date: 2026-05-19*
 

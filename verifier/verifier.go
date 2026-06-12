@@ -98,7 +98,7 @@ func WritePythonCode(vk plonk.VerifyingKey, outputType ContractType, w io.Writer
 			"hex": func(p bls12381.G1Affine) string {
 				b := p.RawBytes()
 				if p.IsInfinity() {
-					// the first byte is 0x80 to indicate infinity,
+					// the first byte is 0x40 to indicate infinity,
 					// but we want it set to 0x00 for the verifier
 					b[0] = 0x00
 				}

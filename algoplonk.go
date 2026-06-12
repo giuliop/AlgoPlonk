@@ -39,9 +39,13 @@ func Compile(circuit frontend.Circuit, curve ecc.ID, setupConfig setup.Name) (
 	if curve != ecc.BN254 && curve != ecc.BLS12_381 {
 		return nil, fmt.Errorf("unsupported curve: %v", curve)
 	}
-	if curve != setup.Setups[setupConfig].Curve {
+	setupInfo, ok := setup.Get(setupConfig)
+	if !ok {
+		return nil, fmt.Errorf("unknown setup: %v", setupConfig)
+	}
+	if curve != setupInfo.Curve {
 		return nil, fmt.Errorf("setup curve %v does not match circuit curve %v",
-			setup.Setups[setupConfig].Curve, curve)
+			setupInfo.Curve, curve)
 	}
 	ccs, err := frontend.Compile(curve.ScalarField(), scs.NewBuilder, circuit)
 	if err != nil {

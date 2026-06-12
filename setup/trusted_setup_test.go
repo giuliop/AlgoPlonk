@@ -9,9 +9,19 @@ import (
 	"github.com/consensys/gnark-crypto/ecc/bn254"
 )
 
+func mustGetSetup(t *testing.T, setupConfig Name) Setup {
+	t.Helper()
+
+	setup, ok := Get(setupConfig)
+	if !ok {
+		t.Fatalf("missing setup metadata for %v", setupConfig)
+	}
+	return setup
+}
+
 func TestTrustedSetupPerpetualPowersOfTauBN254(t *testing.T) {
 	const size = 5
-	setup := Setups[PerpetualPowersOfTauBN254]
+	setup := mustGetSetup(t, PerpetualPowersOfTauBN254)
 	srs, err := trustedSetupBN254(size, setup.NamePath)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
@@ -31,7 +41,7 @@ func TestTrustedSetupPerpetualPowersOfTauBN254(t *testing.T) {
 
 func TestTrustedSetupDuskBLS12381(t *testing.T) {
 	const size = 5
-	setup := Setups[DuskBLS12381]
+	setup := mustGetSetup(t, DuskBLS12381)
 	srs, err := trustedSetupBLS12381(size, setup.NamePath)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
@@ -161,7 +171,7 @@ func TestTrustedSetupDuskBLS12381(t *testing.T) {
 
 func TestTrustedSetupEethereumKzgCeremonyBLS12_381(t *testing.T) {
 	const size = 5
-	setup := Setups[EthereumKzgCeremonyBLS12381]
+	setup := mustGetSetup(t, EthereumKzgCeremonyBLS12381)
 	srs, err := trustedSetupBLS12381(size, setup.NamePath)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)

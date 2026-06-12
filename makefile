@@ -3,11 +3,11 @@
 # The 'all' target runs examples first, then tests.
 all: examples test
 
-# Run tests only in packages that contain test files.
+# Run all tests.
 test:
 	@echo "Running tests..."
 	@rm ./testutils/generated/*
-	@go test -v $$(go list -f '{{if .TestGoFiles}}{{.ImportPath}}{{end}}' ./...)
+	@go test -v ./...
 
 # Run all example main.go files in the examples/ directory and its subdirectories.
 examples:

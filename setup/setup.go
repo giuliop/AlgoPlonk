@@ -24,7 +24,7 @@ type Name int
 
 // Available setups. To add a new setup you need to:
 // 1. Add a new Name constant below with the appropriate name
-// 2. Add a new entry in the Setups map below with the appropriate curve and NamePath
+// 2. Add a new entry in the setups map below with the appropriate curve and NamePath
 // 3. Create the setup/<NamePath> directory with the trusted setup files pk.bin and vk.bin
 // 4. Embed the files in the binary using go:embed, as shown below
 const (
@@ -43,11 +43,10 @@ const (
 type Setup struct {
 	Curve    ecc.ID // the elliptic curve used by the setup
 	NamePath string // the embedded file name containing the setup
-	Trusted  bool   // whether this is a test only setup
+	Trusted  bool   // whether this setup uses trusted setup files
 }
 
-// Setups is a map of available setups, indexed by their Name.
-var Setups = map[Name]Setup{
+var setups = map[Name]Setup{
 	PerpetualPowersOfTauBN254: {
 		Curve:    ecc.BN254,
 		NamePath: "PerpetualPowersOfTauBN254",
@@ -75,6 +74,12 @@ var Setups = map[Name]Setup{
 	},
 }
 
+// Get returns the setup metadata for a setup name.
+func Get(setupConfig Name) (Setup, bool) {
+	setup, ok := setups[setupConfig]
+	return setup, ok
+}
+
 // We embed the trusted setup files in the binary using go:embed
 //
 //go:embed EethereumKzgCeremonyBLS12_381/pk.bin
@@ -90,7 +95,10 @@ var embeddedFiles embed.FS
 func Run(ccs constraint.ConstraintSystem, setupConfig Name) (
 	plonk.ProvingKey, plonk.VerifyingKey, error) {
 
-	setup := Setups[setupConfig]
+	setup, ok := Get(setupConfig)
+	if !ok {
+		return nil, nil, fmt.Errorf("unknown setup: %v", setupConfig)
+	}
 	if !setup.Trusted {
 		srs, lagrangeSrs, err := unsafekzg.NewSRS(ccs)
 		if err != nil {
