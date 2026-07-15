@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.3.1
+*Date: 2026-07-15*
+
+### Changed
+- **Dependencies**
+  - Go 1.25.7
+  - gnark v0.15.0
+  - gnark-crypto v0.20.1
+
 ## v0.3.0
 *Date: 2026-06-12*
 
