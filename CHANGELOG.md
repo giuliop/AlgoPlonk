@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Security
+- **Off-chain PLONK verification**
+  - Versions v0.1.5 through v0.3.1 loaded trusted KZG verifying keys with
+    zero-valued precomputed pairing lines. An attacker could craft proofs that
+    satisfy PLONK's scalar relation while their polynomial openings remain
+    unauthenticated, allowing forged proofs to pass off-chain verification.
+  - Generated Algorand smart-contract and LogicSig verifiers are unaffected;
+    they use the raw curve points with AVM pairing opcodes.
+
 ### Fixed
 - **setup package**
   - Decode the trusted KZG verifying-key points explicitly and derive the
@@ -12,6 +21,10 @@
 - **utils package**
   - Recompute KZG pairing lines when deserializing compiled circuits, including
     circuits serialized by affected earlier versions with zero-valued lines.
+  - Reject deserialized KZG verifying keys containing points at infinity.
+  - Verifying keys persisted outside a compiled-circuit file are not repaired
+    automatically and must be regenerated or have their pairing lines
+    recomputed before off-chain use.
 
 ## v0.3.1
 *Date: 2026-07-15*

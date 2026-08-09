@@ -3,6 +3,7 @@ package setup
 import (
 	"encoding/hex"
 	"fmt"
+	"math/big"
 	"reflect"
 	"testing"
 
@@ -20,12 +21,97 @@ func mustGetSetup(t *testing.T, setupConfig Name) Setup {
 	return setup
 }
 
-func TestDecodeTrustedVerifyingKeyRejectsInvalidLength(t *testing.T) {
-	if _, err := decodeTrustedVerifyingKeyBN254(nil); err == nil {
-		t.Fatal("expected invalid BN254 verifying-key length error")
+func TestDecodeTrustedVerifyingKeyBN254RejectsInvalidData(t *testing.T) {
+	setup := mustGetSetup(t, PerpetualPowersOfTauBN254)
+	valid, err := embeddedFiles.ReadFile(setup.NamePath + "/vk.bin")
+	if err != nil {
+		t.Fatalf("error reading embedded verifying key: %v", err)
 	}
-	if _, err := decodeTrustedVerifyingKeyBLS12381(nil); err == nil {
-		t.Fatal("expected invalid BLS12-381 verifying-key length error")
+
+	malformed := append([]byte(nil), valid...)
+	for i := 0; i < bn254.SizeOfG2AffineCompressed; i++ {
+		malformed[i] = 0xff
+	}
+	noncanonicalG2 := append([]byte(nil), valid...)
+	copy(noncanonicalG2[:bn254.SizeOfG2AffineCompressed],
+		valid[bn254.SizeOfG2AffineCompressed:2*bn254.SizeOfG2AffineCompressed])
+	infinityG2 := append([]byte(nil), valid...)
+	var infinity bn254.G2Affine
+	infinityBytes := infinity.Bytes()
+	copy(infinityG2[bn254.SizeOfG2AffineCompressed:2*bn254.SizeOfG2AffineCompressed],
+		infinityBytes[:])
+	noncanonicalG1 := append([]byte(nil), valid...)
+	_, _, g1Generator, _ := bn254.Generators()
+	var doubledG1 bn254.G1Affine
+	doubledG1.ScalarMultiplication(&g1Generator, big.NewInt(2))
+	doubledG1Bytes := doubledG1.Bytes()
+	copy(noncanonicalG1[2*bn254.SizeOfG2AffineCompressed:], doubledG1Bytes[:])
+
+	tests := []struct {
+		name string
+		data []byte
+	}{
+		{"empty", nil},
+		{"truncated", valid[:len(valid)-1]},
+		{"trailing byte", append(append([]byte(nil), valid...), 0)},
+		{"malformed point", malformed},
+		{"noncanonical G2 generator", noncanonicalG2},
+		{"infinity G2[1]", infinityG2},
+		{"noncanonical G1 generator", noncanonicalG1},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if _, err := decodeTrustedVerifyingKeyBN254(test.data); err == nil {
+				t.Fatal("expected invalid BN254 verifying key to be rejected")
+			}
+		})
+	}
+}
+
+func TestDecodeTrustedVerifyingKeyBLS12381RejectsInvalidData(t *testing.T) {
+	setup := mustGetSetup(t, EthereumKzgCeremonyBLS12381)
+	valid, err := embeddedFiles.ReadFile(setup.NamePath + "/vk.bin")
+	if err != nil {
+		t.Fatalf("error reading embedded verifying key: %v", err)
+	}
+
+	malformed := append([]byte(nil), valid...)
+	for i := 0; i < bls12381.SizeOfG2AffineCompressed; i++ {
+		malformed[i] = 0xff
+	}
+	noncanonicalG2 := append([]byte(nil), valid...)
+	copy(noncanonicalG2[:bls12381.SizeOfG2AffineCompressed],
+		valid[bls12381.SizeOfG2AffineCompressed:2*bls12381.SizeOfG2AffineCompressed])
+	infinityG2 := append([]byte(nil), valid...)
+	var infinity bls12381.G2Affine
+	infinityBytes := infinity.Bytes()
+	copy(infinityG2[bls12381.SizeOfG2AffineCompressed:2*bls12381.SizeOfG2AffineCompressed],
+		infinityBytes[:])
+	noncanonicalG1 := append([]byte(nil), valid...)
+	_, _, g1Generator, _ := bls12381.Generators()
+	var doubledG1 bls12381.G1Affine
+	doubledG1.ScalarMultiplication(&g1Generator, big.NewInt(2))
+	doubledG1Bytes := doubledG1.Bytes()
+	copy(noncanonicalG1[2*bls12381.SizeOfG2AffineCompressed:], doubledG1Bytes[:])
+
+	tests := []struct {
+		name string
+		data []byte
+	}{
+		{"empty", nil},
+		{"truncated", valid[:len(valid)-1]},
+		{"trailing byte", append(append([]byte(nil), valid...), 0)},
+		{"malformed point", malformed},
+		{"noncanonical G2 generator", noncanonicalG2},
+		{"infinity G2[1]", infinityG2},
+		{"noncanonical G1 generator", noncanonicalG1},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if _, err := decodeTrustedVerifyingKeyBLS12381(test.data); err == nil {
+				t.Fatal("expected invalid BLS12-381 verifying key to be rejected")
+			}
+		})
 	}
 }
 

@@ -14,7 +14,9 @@ import (
 	"github.com/algorand/avm-abi/abi"
 	"github.com/consensys/gnark-crypto/ecc"
 	bls12381 "github.com/consensys/gnark-crypto/ecc/bls12-381"
+	kzg_bls12381 "github.com/consensys/gnark-crypto/ecc/bls12-381/kzg"
 	"github.com/consensys/gnark-crypto/ecc/bn254"
+	kzg_bn254 "github.com/consensys/gnark-crypto/ecc/bn254/kzg"
 	"github.com/consensys/gnark/backend/plonk"
 	plonk_bls12381 "github.com/consensys/gnark/backend/plonk/bls12-381"
 	plonk_bn254 "github.com/consensys/gnark/backend/plonk/bn254"
@@ -170,32 +172,70 @@ func recomputeKZGVerifyingKeyLines(cc *ap.CompiledCircuit) error {
 	switch cc.Curve {
 	case ecc.BN254:
 		pk, ok := cc.Pk.(*plonk_bn254.ProvingKey)
-		if !ok || pk.Vk == nil {
+		if !ok {
 			return fmt.Errorf("unexpected BN254 proving key type")
+		}
+		if pk.Vk == nil {
+			return fmt.Errorf("BN254 proving key has no verifying key")
 		}
 		vk, ok := cc.Vk.(*plonk_bn254.VerifyingKey)
 		if !ok {
 			return fmt.Errorf("unexpected BN254 verifying key type")
 		}
-		pk.Vk.Kzg.Lines[0] = bn254.PrecomputeLines(pk.Vk.Kzg.G2[0])
-		pk.Vk.Kzg.Lines[1] = bn254.PrecomputeLines(pk.Vk.Kzg.G2[1])
-		vk.Kzg.Lines[0] = bn254.PrecomputeLines(vk.Kzg.G2[0])
-		vk.Kzg.Lines[1] = bn254.PrecomputeLines(vk.Kzg.G2[1])
+		if err := recomputeBN254KZGVerifyingKeyLines("proving key", &pk.Vk.Kzg); err != nil {
+			return err
+		}
+		if err := recomputeBN254KZGVerifyingKeyLines("verifying key", &vk.Kzg); err != nil {
+			return err
+		}
 	case ecc.BLS12_381:
 		pk, ok := cc.Pk.(*plonk_bls12381.ProvingKey)
-		if !ok || pk.Vk == nil {
+		if !ok {
 			return fmt.Errorf("unexpected BLS12-381 proving key type")
+		}
+		if pk.Vk == nil {
+			return fmt.Errorf("BLS12-381 proving key has no verifying key")
 		}
 		vk, ok := cc.Vk.(*plonk_bls12381.VerifyingKey)
 		if !ok {
 			return fmt.Errorf("unexpected BLS12-381 verifying key type")
 		}
-		pk.Vk.Kzg.Lines[0] = bls12381.PrecomputeLines(pk.Vk.Kzg.G2[0])
-		pk.Vk.Kzg.Lines[1] = bls12381.PrecomputeLines(pk.Vk.Kzg.G2[1])
-		vk.Kzg.Lines[0] = bls12381.PrecomputeLines(vk.Kzg.G2[0])
-		vk.Kzg.Lines[1] = bls12381.PrecomputeLines(vk.Kzg.G2[1])
+		if err := recomputeBLS12381KZGVerifyingKeyLines("proving key", &pk.Vk.Kzg); err != nil {
+			return err
+		}
+		if err := recomputeBLS12381KZGVerifyingKeyLines("verifying key", &vk.Kzg); err != nil {
+			return err
+		}
 	default:
 		return fmt.Errorf("unsupported curve: %v", cc.Curve)
+	}
+	return nil
+}
+
+func recomputeBN254KZGVerifyingKeyLines(label string, vk *kzg_bn254.VerifyingKey) error {
+	if vk.G1.IsInfinity() {
+		return fmt.Errorf("BN254 %s KZG G1 is infinity", label)
+	}
+	for i := range vk.G2 {
+		if vk.G2[i].IsInfinity() {
+			return fmt.Errorf("BN254 %s KZG G2[%d] is infinity", label, i)
+		}
+		vk.Lines[i] = bn254.PrecomputeLines(vk.G2[i])
+	}
+	return nil
+}
+
+func recomputeBLS12381KZGVerifyingKeyLines(label string,
+	vk *kzg_bls12381.VerifyingKey,
+) error {
+	if vk.G1.IsInfinity() {
+		return fmt.Errorf("BLS12-381 %s KZG G1 is infinity", label)
+	}
+	for i := range vk.G2 {
+		if vk.G2[i].IsInfinity() {
+			return fmt.Errorf("BLS12-381 %s KZG G2[%d] is infinity", label, i)
+		}
+		vk.Lines[i] = bls12381.PrecomputeLines(vk.G2[i])
 	}
 	return nil
 }

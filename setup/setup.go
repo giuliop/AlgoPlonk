@@ -231,6 +231,16 @@ func decodeTrustedVerifyingKeyBLS12381(data []byte) (kzg_bls12381.VerifyingKey, 
 		return vk, fmt.Errorf("read %d of %d verifying-key bytes",
 			dec.BytesRead(), len(data))
 	}
+	_, _, g1Generator, g2Generator := bls12381.Generators()
+	if !vk.G1.Equal(&g1Generator) {
+		return vk, fmt.Errorf("G1 is not the canonical generator")
+	}
+	if !vk.G2[0].Equal(&g2Generator) {
+		return vk, fmt.Errorf("G2[0] is not the canonical generator")
+	}
+	if vk.G2[1].IsInfinity() {
+		return vk, fmt.Errorf("G2[1] is infinity")
+	}
 
 	vk.Lines[0] = bls12381.PrecomputeLines(vk.G2[0])
 	vk.Lines[1] = bls12381.PrecomputeLines(vk.G2[1])
@@ -257,6 +267,16 @@ func decodeTrustedVerifyingKeyBN254(data []byte) (kzg_bn254.VerifyingKey, error)
 		return vk, fmt.Errorf("read %d of %d verifying-key bytes",
 			dec.BytesRead(), len(data))
 	}
+	_, _, g1Generator, g2Generator := bn254.Generators()
+	if !vk.G1.Equal(&g1Generator) {
+		return vk, fmt.Errorf("G1 is not the canonical generator")
+	}
+	if !vk.G2[0].Equal(&g2Generator) {
+		return vk, fmt.Errorf("G2[0] is not the canonical generator")
+	}
+	if vk.G2[1].IsInfinity() {
+		return vk, fmt.Errorf("G2[1] is infinity")
+	}
 
 	vk.Lines[0] = bn254.PrecomputeLines(vk.G2[0])
 	vk.Lines[1] = bn254.PrecomputeLines(vk.G2[1])
@@ -278,13 +298,13 @@ func loadTrustedSetupBytes(filename string, g1Count uint64, g1CompressedSize uin
 	if err != nil {
 		return nil, nil, fmt.Errorf("error opening %s: %w", pkPath, err)
 	}
+	if len(g1Bytes) < 4 {
+		return nil, nil, fmt.Errorf("%s is too small to contain a point count", pkPath)
+	}
 
 	vkBytes, err = embeddedFiles.ReadFile(vkPath)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error opening %s: %w", vkPath, err)
-	}
-	if len(g1Bytes) < 4 {
-		return nil, nil, fmt.Errorf("%s is too small to contain a point count", pkPath)
 	}
 
 	// the first 4 bytes of the pk.bin file are the size of the G1 array
