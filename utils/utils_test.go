@@ -160,7 +160,7 @@ func TestDeserializeCompiledCircuitRepairsKZGVerifyingKeyLines(t *testing.T) {
 				t.Fatalf("error creating public witness: %v", err)
 			}
 
-			zeroKZGVerifyingKeyLines(cc)
+			zeroKZGVerifyingKeyLines(t, cc)
 			path := filepath.Join(t.TempDir(), "compiled-circuit.bin")
 			if err := SerializeCompiledCircuit(cc, path); err != nil {
 				t.Fatalf("error serializing compiled circuit: %v", err)
@@ -168,6 +168,9 @@ func TestDeserializeCompiledCircuitRepairsKZGVerifyingKeyLines(t *testing.T) {
 			loaded, err := DeserializeCompiledCircuit(path)
 			if err != nil {
 				t.Fatalf("error deserializing compiled circuit: %v", err)
+			}
+			if err := plonk.Verify(verifiedProof.Proof, loaded.Vk, publicWitness); err != nil {
+				t.Fatalf("honest proof was rejected after artifact repair: %v", err)
 			}
 
 			switch proof := verifiedProof.Proof.(type) {
@@ -211,7 +214,9 @@ func newBLS12381KZGTestCircuit() *ap.CompiledCircuit {
 	return &ap.CompiledCircuit{Pk: pk, Vk: vk, Curve: ecc.BLS12_381}
 }
 
-func zeroKZGVerifyingKeyLines(cc *ap.CompiledCircuit) {
+func zeroKZGVerifyingKeyLines(t *testing.T, cc *ap.CompiledCircuit) {
+	t.Helper()
+
 	switch cc.Curve {
 	case ecc.BN254:
 		zero := [2][2][len(bn254.LoopCounter)]bn254.LineEvaluationAff{}
@@ -221,5 +226,7 @@ func zeroKZGVerifyingKeyLines(cc *ap.CompiledCircuit) {
 		zero := [2][2][len(bls12381.LoopCounter) - 1]bls12381.LineEvaluationAff{}
 		cc.Pk.(*plonk_bls12381.ProvingKey).Vk.Kzg.Lines = zero
 		cc.Vk.(*plonk_bls12381.VerifyingKey).Kzg.Lines = zero
+	default:
+		t.Fatalf("unsupported curve: %v", cc.Curve)
 	}
 }

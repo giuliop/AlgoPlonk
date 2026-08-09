@@ -180,6 +180,9 @@ func trustedSetupBLS12381(size uint64, setupName string) (*kzg_bls12381.SRS, err
 	if err != nil {
 		return nil, fmt.Errorf("error decoding verifying key: %w", err)
 	}
+	if !srs.Pk.G1[0].Equal(&srs.Vk.G1) {
+		return nil, fmt.Errorf("proving key G1[0] does not match verifying key G1")
+	}
 
 	return &srs, nil
 }
@@ -203,6 +206,9 @@ func trustedSetupBN254(size uint64, setupName string) (*kzg_bn254.SRS, error) {
 	srs.Vk, err = decodeTrustedVerifyingKeyBN254(vkData)
 	if err != nil {
 		return nil, fmt.Errorf("error decoding verifying key: %w", err)
+	}
+	if !srs.Pk.G1[0].Equal(&srs.Vk.G1) {
+		return nil, fmt.Errorf("proving key G1[0] does not match verifying key G1")
 	}
 
 	return &srs, nil
