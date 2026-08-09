@@ -13,7 +13,13 @@ import (
 
 	"github.com/algorand/avm-abi/abi"
 	"github.com/consensys/gnark-crypto/ecc"
+	bls12381 "github.com/consensys/gnark-crypto/ecc/bls12-381"
+	kzg_bls12381 "github.com/consensys/gnark-crypto/ecc/bls12-381/kzg"
+	"github.com/consensys/gnark-crypto/ecc/bn254"
+	kzg_bn254 "github.com/consensys/gnark-crypto/ecc/bn254/kzg"
 	"github.com/consensys/gnark/backend/plonk"
+	plonk_bls12381 "github.com/consensys/gnark/backend/plonk/bls12-381"
+	plonk_bn254 "github.com/consensys/gnark/backend/plonk/bn254"
 	ap "github.com/giuliop/algoplonk"
 )
 
@@ -152,8 +158,86 @@ func DeserializeCompiledCircuit(filepath string) (*ap.CompiledCircuit, error) {
 	if _, err := cc.Vk.ReadFrom(vkReader); err != nil {
 		return nil, fmt.Errorf("error reading VK data: %v", err)
 	}
+	if err := recomputeKZGVerifyingKeyLines(cc); err != nil {
+		return nil, fmt.Errorf("error preparing KZG verifying keys: %v", err)
+	}
 
 	return cc, nil
+}
+
+// KZG pairing lines are derived from the verifying key's G2 points. Recompute
+// them instead of trusting serialized derived data, and repair compiled circuits
+// serialized by versions that persisted zero-valued lines.
+func recomputeKZGVerifyingKeyLines(cc *ap.CompiledCircuit) error {
+	switch cc.Curve {
+	case ecc.BN254:
+		pk, ok := cc.Pk.(*plonk_bn254.ProvingKey)
+		if !ok {
+			return fmt.Errorf("unexpected BN254 proving key type")
+		}
+		if pk.Vk == nil {
+			return fmt.Errorf("BN254 proving key has no verifying key")
+		}
+		vk, ok := cc.Vk.(*plonk_bn254.VerifyingKey)
+		if !ok {
+			return fmt.Errorf("unexpected BN254 verifying key type")
+		}
+		if err := recomputeBN254KZGVerifyingKeyLines("proving key", &pk.Vk.Kzg); err != nil {
+			return err
+		}
+		if err := recomputeBN254KZGVerifyingKeyLines("verifying key", &vk.Kzg); err != nil {
+			return err
+		}
+	case ecc.BLS12_381:
+		pk, ok := cc.Pk.(*plonk_bls12381.ProvingKey)
+		if !ok {
+			return fmt.Errorf("unexpected BLS12-381 proving key type")
+		}
+		if pk.Vk == nil {
+			return fmt.Errorf("BLS12-381 proving key has no verifying key")
+		}
+		vk, ok := cc.Vk.(*plonk_bls12381.VerifyingKey)
+		if !ok {
+			return fmt.Errorf("unexpected BLS12-381 verifying key type")
+		}
+		if err := recomputeBLS12381KZGVerifyingKeyLines("proving key", &pk.Vk.Kzg); err != nil {
+			return err
+		}
+		if err := recomputeBLS12381KZGVerifyingKeyLines("verifying key", &vk.Kzg); err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("unsupported curve: %v", cc.Curve)
+	}
+	return nil
+}
+
+func recomputeBN254KZGVerifyingKeyLines(label string, vk *kzg_bn254.VerifyingKey) error {
+	if vk.G1.IsInfinity() {
+		return fmt.Errorf("BN254 %s KZG G1 is infinity", label)
+	}
+	for i := range vk.G2 {
+		if vk.G2[i].IsInfinity() {
+			return fmt.Errorf("BN254 %s KZG G2[%d] is infinity", label, i)
+		}
+		vk.Lines[i] = bn254.PrecomputeLines(vk.G2[i])
+	}
+	return nil
+}
+
+func recomputeBLS12381KZGVerifyingKeyLines(label string,
+	vk *kzg_bls12381.VerifyingKey,
+) error {
+	if vk.G1.IsInfinity() {
+		return fmt.Errorf("BLS12-381 %s KZG G1 is infinity", label)
+	}
+	for i := range vk.G2 {
+		if vk.G2[i].IsInfinity() {
+			return fmt.Errorf("BLS12-381 %s KZG G2[%d] is infinity", label, i)
+		}
+		vk.Lines[i] = bls12381.PrecomputeLines(vk.G2[i])
+	}
+	return nil
 }
 
 // ProofAndPublicInputsForAtomicComposer takes a proof and public input binary blob and

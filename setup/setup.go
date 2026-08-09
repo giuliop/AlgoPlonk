@@ -170,8 +170,19 @@ func trustedSetupBLS12381(size uint64, setupName string) (*kzg_bls12381.SRS, err
 	}
 
 	var srs kzg_bls12381.SRS
-	srs.Pk.ReadFrom(bytes.NewReader(G1s))
-	srs.Vk.ReadFrom(bytes.NewReader(vkData))
+	if n, err := srs.Pk.ReadFrom(bytes.NewReader(G1s)); err != nil {
+		return nil, fmt.Errorf("error decoding proving key: %w", err)
+	} else if n != int64(len(G1s)) {
+		return nil, fmt.Errorf("error decoding proving key: read %d of %d bytes",
+			n, len(G1s))
+	}
+	srs.Vk, err = decodeTrustedVerifyingKeyBLS12381(vkData)
+	if err != nil {
+		return nil, fmt.Errorf("error decoding verifying key: %w", err)
+	}
+	if !srs.Pk.G1[0].Equal(&srs.Vk.G1) {
+		return nil, fmt.Errorf("proving key G1[0] does not match verifying key G1")
+	}
 
 	return &srs, nil
 }
@@ -186,10 +197,96 @@ func trustedSetupBN254(size uint64, setupName string) (*kzg_bn254.SRS, error) {
 	}
 
 	var srs kzg_bn254.SRS
-	srs.Pk.ReadFrom(bytes.NewReader(G1s))
-	srs.Vk.ReadFrom(bytes.NewReader(vkData))
+	if n, err := srs.Pk.ReadFrom(bytes.NewReader(G1s)); err != nil {
+		return nil, fmt.Errorf("error decoding proving key: %w", err)
+	} else if n != int64(len(G1s)) {
+		return nil, fmt.Errorf("error decoding proving key: read %d of %d bytes",
+			n, len(G1s))
+	}
+	srs.Vk, err = decodeTrustedVerifyingKeyBN254(vkData)
+	if err != nil {
+		return nil, fmt.Errorf("error decoding verifying key: %w", err)
+	}
+	if !srs.Pk.G1[0].Equal(&srs.Vk.G1) {
+		return nil, fmt.Errorf("proving key G1[0] does not match verifying key G1")
+	}
 
 	return &srs, nil
+}
+
+// The embedded vk.bin files contain the three KZG verifying-key points only.
+// gnark-crypto's VerifyingKey.ReadFrom also expects serialized precomputed
+// pairing lines, so decode the points explicitly and derive the lines from G2.
+func decodeTrustedVerifyingKeyBLS12381(data []byte) (kzg_bls12381.VerifyingKey, error) {
+	var vk kzg_bls12381.VerifyingKey
+	expectedLen := 2*bls12381.SizeOfG2AffineCompressed +
+		bls12381.SizeOfG1AffineCompressed
+	if len(data) != expectedLen {
+		return vk, fmt.Errorf("invalid vk.bin length: got %d, expected %d",
+			len(data), expectedLen)
+	}
+
+	dec := bls12381.NewDecoder(bytes.NewReader(data))
+	points := []any{&vk.G2[0], &vk.G2[1], &vk.G1}
+	for i, point := range points {
+		if err := dec.Decode(point); err != nil {
+			return vk, fmt.Errorf("error decoding point %d: %w", i, err)
+		}
+	}
+	if dec.BytesRead() != int64(len(data)) {
+		return vk, fmt.Errorf("read %d of %d verifying-key bytes",
+			dec.BytesRead(), len(data))
+	}
+	_, _, g1Generator, g2Generator := bls12381.Generators()
+	if !vk.G1.Equal(&g1Generator) {
+		return vk, fmt.Errorf("G1 is not the canonical generator")
+	}
+	if !vk.G2[0].Equal(&g2Generator) {
+		return vk, fmt.Errorf("G2[0] is not the canonical generator")
+	}
+	if vk.G2[1].IsInfinity() {
+		return vk, fmt.Errorf("G2[1] is infinity")
+	}
+
+	vk.Lines[0] = bls12381.PrecomputeLines(vk.G2[0])
+	vk.Lines[1] = bls12381.PrecomputeLines(vk.G2[1])
+	return vk, nil
+}
+
+func decodeTrustedVerifyingKeyBN254(data []byte) (kzg_bn254.VerifyingKey, error) {
+	var vk kzg_bn254.VerifyingKey
+	expectedLen := 2*bn254.SizeOfG2AffineCompressed +
+		bn254.SizeOfG1AffineCompressed
+	if len(data) != expectedLen {
+		return vk, fmt.Errorf("invalid vk.bin length: got %d, expected %d",
+			len(data), expectedLen)
+	}
+
+	dec := bn254.NewDecoder(bytes.NewReader(data))
+	points := []any{&vk.G2[0], &vk.G2[1], &vk.G1}
+	for i, point := range points {
+		if err := dec.Decode(point); err != nil {
+			return vk, fmt.Errorf("error decoding point %d: %w", i, err)
+		}
+	}
+	if dec.BytesRead() != int64(len(data)) {
+		return vk, fmt.Errorf("read %d of %d verifying-key bytes",
+			dec.BytesRead(), len(data))
+	}
+	_, _, g1Generator, g2Generator := bn254.Generators()
+	if !vk.G1.Equal(&g1Generator) {
+		return vk, fmt.Errorf("G1 is not the canonical generator")
+	}
+	if !vk.G2[0].Equal(&g2Generator) {
+		return vk, fmt.Errorf("G2[0] is not the canonical generator")
+	}
+	if vk.G2[1].IsInfinity() {
+		return vk, fmt.Errorf("G2[1] is infinity")
+	}
+
+	vk.Lines[0] = bn254.PrecomputeLines(vk.G2[0])
+	vk.Lines[1] = bn254.PrecomputeLines(vk.G2[1])
+	return vk, nil
 }
 
 // loadTrustedSetupBytes loads the trusted setup parameters from the embedded filesystem.
@@ -206,6 +303,9 @@ func loadTrustedSetupBytes(filename string, g1Count uint64, g1CompressedSize uin
 	g1Bytes, err = embeddedFiles.ReadFile(pkPath)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error opening %s: %w", pkPath, err)
+	}
+	if len(g1Bytes) < 4 {
+		return nil, nil, fmt.Errorf("%s is too small to contain a point count", pkPath)
 	}
 
 	vkBytes, err = embeddedFiles.ReadFile(vkPath)

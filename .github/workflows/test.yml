@@ -1,0 +1,57 @@
+name: Test
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go:
+    name: Go checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Test localnet-free packages
+        run: go test -count=1 . ./setup ./utils ./verifier
+      - name: Vet localnet-free packages
+        run: go vet . ./setup ./utils ./verifier
+
+  localnet:
+    name: LocalNet integration tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v9.0.0
+      - name: Install AlgoKit
+        run: |
+          uv tool install algokit==2.10.2
+          uv tool install pipx
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Start LocalNet
+        id: localnet
+        run: algokit localnet start
+      - name: Test all packages
+        run: go test -count=1 ./...
+      - name: Stop LocalNet
+        if: always() && steps.localnet.outcome == 'success'
+        run: algokit localnet stop

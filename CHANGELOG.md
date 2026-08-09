@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- Tightened off-chain verification.
+
 ## v0.3.1
 *Date: 2026-07-15*
 
