@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- **setup package**
+  - Decode the trusted KZG verifying-key points explicitly and derive the
+    precomputed pairing lines required by gnark-crypto, restoring sound
+    off-chain KZG opening verification.
+  - Return trusted-setup decoding errors instead of silently accepting partial
+    proving or verifying keys.
+- **utils package**
+  - Recompute KZG pairing lines when deserializing compiled circuits, including
+    circuits serialized by affected earlier versions with zero-valued lines.
+
 ## v0.3.1
 *Date: 2026-07-15*
 

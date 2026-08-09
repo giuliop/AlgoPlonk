@@ -3,6 +3,7 @@ package setup
 import (
 	"encoding/hex"
 	"fmt"
+	"reflect"
 	"testing"
 
 	bls12381 "github.com/consensys/gnark-crypto/ecc/bls12-381"
@@ -17,6 +18,15 @@ func mustGetSetup(t *testing.T, setupConfig Name) Setup {
 		t.Fatalf("missing setup metadata for %v", setupConfig)
 	}
 	return setup
+}
+
+func TestDecodeTrustedVerifyingKeyRejectsInvalidLength(t *testing.T) {
+	if _, err := decodeTrustedVerifyingKeyBN254(nil); err == nil {
+		t.Fatal("expected invalid BN254 verifying-key length error")
+	}
+	if _, err := decodeTrustedVerifyingKeyBLS12381(nil); err == nil {
+		t.Fatal("expected invalid BLS12-381 verifying-key length error")
+	}
 }
 
 func TestTrustedSetupPerpetualPowersOfTauBN254(t *testing.T) {
@@ -36,6 +46,12 @@ func TestTrustedSetupPerpetualPowersOfTauBN254(t *testing.T) {
 	}
 	if !srs.Vk.G2[0].Equal(&g2Gen) {
 		t.Errorf("different g2 generator: %v | %v", srs.Vk.G2[0], g2Gen)
+	}
+	for i := range srs.Vk.G2 {
+		expected := bn254.PrecomputeLines(srs.Vk.G2[i])
+		if !reflect.DeepEqual(srs.Vk.Lines[i], expected) {
+			t.Errorf("incorrect precomputed lines for G2[%d]", i)
+		}
 	}
 }
 
@@ -87,6 +103,12 @@ func TestTrustedSetupDuskBLS12381(t *testing.T) {
 	}
 	if !srs.Vk.G2[0].Equal(&g2Gen) {
 		t.Errorf("different g2 generator: %v | %v", srs.Vk.G2[0], g2Gen)
+	}
+	for i := range srs.Vk.G2 {
+		expected := bls12381.PrecomputeLines(srs.Vk.G2[i])
+		if !reflect.DeepEqual(srs.Vk.Lines[i], expected) {
+			t.Errorf("incorrect precomputed lines for G2[%d]", i)
+		}
 	}
 
 	checkG2 := [2]bls12381.G2Affine{}
@@ -214,6 +236,12 @@ func TestTrustedSetupEethereumKzgCeremonyBLS12_381(t *testing.T) {
 	}
 	if !srs.Vk.G2[0].Equal(&g2Gen) {
 		t.Errorf("different g2 generator: %v | %v", srs.Vk.G2[0], g2Gen)
+	}
+	for i := range srs.Vk.G2 {
+		expected := bls12381.PrecomputeLines(srs.Vk.G2[i])
+		if !reflect.DeepEqual(srs.Vk.Lines[i], expected) {
+			t.Errorf("incorrect precomputed lines for G2[%d]", i)
+		}
 	}
 
 	checkG2 := [2]bls12381.G2Affine{}
