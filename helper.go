@@ -3,6 +3,7 @@ package algoplonk
 import (
 	"fmt"
 
+	bls12381 "github.com/consensys/gnark-crypto/ecc/bls12-381"
 	"github.com/consensys/gnark/backend/plonk"
 	plonk_bls12381 "github.com/consensys/gnark/backend/plonk/bls12-381"
 	plonk_bn254 "github.com/consensys/gnark/backend/plonk/bn254"
@@ -32,7 +33,7 @@ func marshalPlonkBls12381Proof(proof *plonk_bls12381.Proof) []byte {
 	// [3][32]byte o_com_x
 	var tmp96 [96]byte
 	for i := 0; i < 3; i++ {
-		tmp96 = proof.LRO[i].RawBytes()
+		tmp96 = marshalBls12381PointForAVM(proof.LRO[i])
 		res = append(res, tmp96[:]...)
 	}
 
@@ -40,7 +41,7 @@ func marshalPlonkBls12381Proof(proof *plonk_bls12381.Proof) []byte {
 	// [3][32]byte h2
 	// [3][32]byte h3
 	for i := 0; i < 3; i++ {
-		tmp96 = proof.H[i].RawBytes()
+		tmp96 = marshalBls12381PointForAVM(proof.H[i])
 		res = append(res, tmp96[:]...)
 	}
 	var tmp32 [32]byte
@@ -56,7 +57,7 @@ func marshalPlonkBls12381Proof(proof *plonk_bls12381.Proof) []byte {
 	}
 
 	// [3][32]byte grand_product_commitment
-	tmp96 = proof.Z.RawBytes()
+	tmp96 = marshalBls12381PointForAVM(proof.Z)
 	res = append(res, tmp96[:]...)
 
 	// [32]byte grand_product_at_zeta_omega;
@@ -64,11 +65,11 @@ func marshalPlonkBls12381Proof(proof *plonk_bls12381.Proof) []byte {
 	res = append(res, tmp32[:]...)
 
 	// [3][32]byte opening_at_zeta_proof
-	tmp96 = proof.BatchedProof.H.RawBytes()
+	tmp96 = marshalBls12381PointForAVM(proof.BatchedProof.H)
 	res = append(res, tmp96[:]...)
 
 	// [3][32]byte opening_at_zeta_omega_proof
-	tmp96 = proof.ZShiftedOpening.H.RawBytes()
+	tmp96 = marshalBls12381PointForAVM(proof.ZShiftedOpening.H)
 	res = append(res, tmp96[:]...)
 
 	// [][32]byte selector_commit_api_at_zeta;
@@ -79,11 +80,21 @@ func marshalPlonkBls12381Proof(proof *plonk_bls12381.Proof) []byte {
 			res = append(res, tmp32[:]...)
 		}
 		for _, bc := range proof.Bsb22Commitments {
-			tmp96 = bc.RawBytes()
+			tmp96 = marshalBls12381PointForAVM(bc)
 			res = append(res, tmp96[:]...)
 		}
 	}
 
+	return res
+}
+
+// marshalBls12381PointForAVM converts gnark's 0x40-prefixed uncompressed
+// encoding of the point at infinity to the all-zero encoding expected by AVM.
+func marshalBls12381PointForAVM(p bls12381.G1Affine) [96]byte {
+	res := p.RawBytes()
+	if p.IsInfinity() {
+		clear(res[:])
+	}
 	return res
 }
 

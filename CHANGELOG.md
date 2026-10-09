@@ -1,9 +1,38 @@
 # Changelog
 
-## Unreleased
+## v0.3.2
+*Date: 2026-10-09*
+
+### Changed
+- **Dependencies**
+  - Go 1.25.13
+
+- **Documentation**
+  - Documented that BLS12-381 verifiers omit per-proof-point subgroup checks,
+    while the final pairing check enforces subgroup membership on its inputs.
+    Raw proof bytes must not be treated as a unique proof identifier.
+  - Expanded agent guidance for BLS12-381 point encodings, Fiat-Shamir inputs,
+    supported Python selection for PuyaPy, and localnet validation.
+
+- **Tests**
+  - Added coverage for BLS12-381 infinity encoding in exported proofs and
+    generated Fiat-Shamir transcript code.
+  - Added coverage for rejecting unsupported verifier contract types.
 
 ### Fixed
 - Tightened off-chain verification.
+
+- **BLS12-381 proof export and verifier templates**
+  - Proof G1 points at infinity are now exported in AVM's all-zero affine
+    encoding instead of gnark's `0x40`-flagged uncompressed encoding.
+  - Fiat-Shamir inputs now convert AVM infinity back to gnark's `0x40`
+    encoding, including computed linearized and folded digest points and KZG
+    opening points. The AVM byte-array bit index was corrected from 0 (`0x80`)
+    to 1 (`0x40`).
+
+- **verifier package**
+  - `WritePythonCode` now returns an error for unsupported `ContractType`
+    values instead of silently generating a smart contract verifier.
 
 ## v0.3.1
 *Date: 2026-07-15*

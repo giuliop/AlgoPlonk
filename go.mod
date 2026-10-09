@@ -1,6 +1,6 @@
 module github.com/giuliop/algoplonk
 
-go 1.25.7
+go 1.25.13
 
 require (
 	github.com/algorand/avm-abi v0.1.1

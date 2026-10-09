@@ -38,6 +38,10 @@ Because of these large consumption numbers, logicsig verifiers are recommended:
 
 Note that the maximum opcode budget a transaction group can make available on Algorand at the moment is 320,000 (20,000 * 16) for logicsigs and 190,400 ( (16+256) * 700 ) for smart contracts. You can achieve that by creating a group with 16 top level app calls and 256 inner app call transactions. Logicsig verifiers therefore have more headroom for small numbers of BSB22 commitments, while smart contract verifiers do not: a BLS12-381 smart contract verifier with even one BSB22 commitment is already above the 190,400 limit.
 
+#### BLS12-381 proof encodings
+
+Generated BLS12-381 verifiers omit gnark's per-point subgroup checks to stay within AVM opcode budgets; final pairing-input subgroup checks preserve proof soundness. They may therefore accept byte-distinct encodings of the same proof, so consuming applications must not treat proof bytes as a unique identifier.
+
 ### Trusted Setup
 
 AlgoPlonk provides out of the box trusted setups for both BLS12-381 and BN256 verifiers.

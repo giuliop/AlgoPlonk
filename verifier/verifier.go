@@ -64,10 +64,13 @@ func WritePythonCode(vk plonk.VerifyingKey, outputType ContractType, w io.Writer
 				return hex.EncodeToString(b[:])
 			},
 		}
-		if outputType == LogicSig {
+		switch outputType {
+		case LogicSig:
 			templ = tmplLogicSigVerifierBn254
-		} else {
+		case SmartContract:
 			templ = tmplSmartContractVerifierBn254
+		default:
+			return fmt.Errorf("unsupported contract type %d", outputType)
 		}
 
 	case *plonk_bls12381.VerifyingKey:
@@ -104,10 +107,13 @@ func WritePythonCode(vk plonk.VerifyingKey, outputType ContractType, w io.Writer
 				return hex.EncodeToString(b[:])
 			},
 		}
-		if outputType == LogicSig {
+		switch outputType {
+		case LogicSig:
 			templ = tmplLogicSigVerifierBls12_381
-		} else {
+		case SmartContract:
 			templ = tmplSmartContractVerifierBls12_381
+		default:
+			return fmt.Errorf("unsupported contract type %d", outputType)
 		}
 
 	default:

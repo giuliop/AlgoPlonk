@@ -316,7 +316,7 @@ class {{ (contractName) }}(py.ARC4Contract):
 
 		# generate challenge to fold the opening proofs
 		linearized_poly_at_z_bytes = bzero(32) | linearized_poly_at_z.bytes
-		r_pre = sha256(b'gamma' + UInt256(zeta).bytes + lin_poly_com
+		r_pre = sha256(b'gamma' + UInt256(zeta).bytes + fs(lin_poly_com)
 			 + fs(L_COM) + fs(R_COM) + fs(O_COM) + VK_S1_fs + VK_S2_fs{{ range $index, $element := .CommitmentConstraintIndexes }} + VK_QCP_{{ $index }}_fs{{ end }}
 			 + linearized_poly_at_z_bytes + L_AT_Z.bytes + R_AT_Z.bytes
 			 + O_AT_Z.bytes + S1_AT_Z.bytes + S2_AT_Z.bytes{{ range $index, $element := .CommitmentConstraintIndexes }} + QCP_{{ $index }}_AT_Z{{ end }}
@@ -358,8 +358,8 @@ class {{ (contractName) }}(py.ARC4Contract):
 		claims = (claims + (BigUInt.from_bytes(QCP_{{ $index }}_AT_Z) * r_acc)) % q
 		{{ end }}
 		# verify the folded proof
-		r_pre = sha256(digest + BATCH_OPENING_AT_Z + fs(GRAND_PRODUCT)
-				+ OPENING_AT_Z_OMEGA + UInt256(zeta).bytes + UInt256(r).bytes)
+		r_pre = sha256(fs(digest) + fs(BATCH_OPENING_AT_Z) + fs(GRAND_PRODUCT)
+				+ fs(OPENING_AT_Z_OMEGA) + UInt256(zeta).bytes + UInt256(r).bytes)
 		r = curvemod(r_pre)
 
 		quotient = BATCH_OPENING_AT_Z
@@ -424,10 +424,10 @@ def invert(p : Bytes) -> Bytes:
 
 @subroutine
 def fs(p: Bytes) -> Bytes:
-	"""If p is the point at infinity, mask the first bit with 1
-	to match gnark's encoding for the fiat-shamir challenge."""
+	"""Convert AVM's all-zero infinity to gnark's 0x40-prefixed encoding
+	for the Fiat-Shamir challenge."""
 	if p == bzero(96):
-		return setbit_bytes(p, 0, True)
+		return setbit_bytes(p, 1, True)
 	return p
 {{ if gt (len .CommitmentConstraintIndexes) 0 }}
 @subroutine
