@@ -23,6 +23,16 @@ External requirements for integration tests (`testutils` package) and examples:
 
 Unit tests in the root, `setup`, and `verifier` packages run without a localnet (the trusted-setup tests are slow but self-contained). `make test` and `go test ./...` include the `testutils` integration tests, so they need localnet and algokit. The `make` cleanup commands do not use `rm -f`; if a generated directory is empty, create or leave a placeholder file before relying on those targets.
 
+## Releases
+
+Stable releases use annotated tags named `vX.Y.Z`. Before tagging, add a matching
+`## vX.Y.Z` section to `CHANGELOG.md` and commit it. Pushing the tag triggers
+`.github/workflows/release.yml`, which publishes a GitHub Release using that
+changelog section as its notes. The workflow can also be dispatched manually
+with an existing tag, which is useful if a tag was pushed before the release
+workflow existed or an earlier run failed. It is idempotent when the release
+already exists.
+
 ## The pipeline (big picture)
 
 1. **Compile** (`algoplonk.go`): `ap.Compile(circuit, curve, setupName)` compiles a gnark circuit and runs the plonk setup, returning a `CompiledCircuit` (constraint system + proving/verifying keys).
