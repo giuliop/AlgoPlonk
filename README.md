@@ -13,6 +13,20 @@ The typical workflow is the following:
 
 To ensure compatibility with gnark (and gnark-crypto if you are using it as well), you can pin them to the versions shown in AlgoPlonk's `go.mod` file.
 
+### CI setup
+
+The GitHub Actions integration job starts AlgoKit LocalNet, which pulls images
+from Docker Hub. To avoid exhausting the runner's shared anonymous pull quota,
+configure these repository settings under **Settings → Secrets and variables → Actions**:
+
+- Variable `DOCKERHUB_USERNAME`: your Docker Hub username.
+- Secret `DOCKERHUB_TOKEN`: a Docker Hub personal access token with read-only access.
+
+The workflow logs in before starting LocalNet when the username is configured.
+Without it, and for pull requests from forks where secrets are unavailable,
+image pulls remain anonymous and may be rate limited. Authenticated pulls are
+still subject to the Docker Hub account's quota.
+
 ### Supported circuits
 
 AlgoPlonk supports the plonk protocol and the curves for which the AVM offers elliptic curve operations: BN254 and BLS12-381.
